@@ -32,6 +32,7 @@ protocol PlanAdjusting {
 protocol NotificationScheduling: AnyObject {
     func requestAuthorization() async -> Bool
     func schedulePlanReminders(for plan: WeeklyPlan)
+    func scheduleFirestorePlanReminder(sports: [FirestoreSportEntry], preferredHour: Int)
     func scheduleTargetAchievedNotification(for activity: ActivityType)
     func clearPlanReminders()
 }

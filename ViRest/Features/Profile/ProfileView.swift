@@ -60,6 +60,7 @@ struct ProfileView: View {
                                     .foregroundStyle(AppPalette.textSecondary)
                             }
                         }
+                        historyCard
 
                         if let info = viewModel.infoMessage {
                             HStack(spacing: 8) {
@@ -96,6 +97,7 @@ struct ProfileView: View {
             .toolbarTitleDisplayMode(.inline)
             .task {
                 viewModel.load()
+                viewModel.loadCheckInHistory()
             }
             .alert("Error", isPresented: Binding(
                 get: { viewModel.errorMessage != nil },

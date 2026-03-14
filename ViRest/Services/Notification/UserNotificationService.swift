@@ -140,4 +140,39 @@ final class UserNotificationService: NotificationScheduling {
         center.add(UNNotificationRequest(identifier: "mid-week-nudge", content: content, trigger: trigger))
     }
 
+    func scheduleFirestorePlanReminder(sports: [FirestoreSportEntry], preferredHour: Int = 19) {
+        // Clear existing plan reminders first
+        clearPlanReminders()
+
+        // Check if all weekly targets are met
+        let allMet = sports.allSatisfy { $0.completedThisWeek >= $0.weeklyTargetCount }
+        guard !allMet else {
+            print("🔔 All weekly targets met — no reminder scheduled")
+            return
+        }
+
+        // Count how many sports still have remaining sessions
+        let remaining = sports.filter { $0.completedThisWeek < $0.weeklyTargetCount }
+        let sportNames = remaining.map { $0.displayName }.joined(separator: ", ")
+
+        let content = UNMutableNotificationContent()
+        content.title = "Weekly target pending 📋"
+        content.body = remaining.count == 1
+            ? "Don't forget your \(sportNames) session today!"
+            : "You still have \(remaining.count) activities pending: \(sportNames)."
+        content.sound = .default
+
+        var components = DateComponents()
+        components.hour = preferredHour
+        components.minute = 0
+
+        let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
+        let request = UNNotificationRequest(
+            identifier: "plan-reminder-weekly-target",
+            content: content,
+            trigger: trigger
+        )
+        center.add(request)
+        print("🔔 Plan reminder scheduled for \(preferredHour):00 — pending: \(sportNames)")
+    }
 }

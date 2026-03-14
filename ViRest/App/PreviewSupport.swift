@@ -206,6 +206,7 @@ final class PreviewHealthDataService: HealthDataProviding {
 final class PreviewNotificationService: NotificationScheduling {
     func requestAuthorization() async -> Bool { true }
     func schedulePlanReminders(for plan: WeeklyPlan) { }
+    func scheduleFirestorePlanReminder(sports: [FirestoreSportEntry], preferredHour: Int) { }
     func scheduleTargetAchievedNotification(for activity: ActivityType) { }
     func clearPlanReminders() { }
 }
