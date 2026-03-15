@@ -51,8 +51,13 @@ struct RootView: View {
             authService: container.authService,
             onAuthenticated: {
                 Task {
-                    await onboardingRegisterViewModel.finalizePendingGuestSubmissionIfNeeded()
-                    appCoordinator.didAuthenticate()
+                    let finalizedGuestOnboarding = await onboardingRegisterViewModel.finalizePendingGuestSubmissionIfNeeded()
+                    if finalizedGuestOnboarding {
+                        authCoordinator.path.removeAll()
+                        appCoordinator.didCompleteOnboarding()
+                    } else {
+                        appCoordinator.didAuthenticate()
+                    }
                 }
             },
             firestoreUserRepository: container.firestoreUserRepository

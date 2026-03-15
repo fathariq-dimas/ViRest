@@ -93,6 +93,7 @@ struct RegisterView: View {
                         .font(.headline)
                         .foregroundStyle(.white)
                 }
+                .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.horizontal, 20)
             }
         }

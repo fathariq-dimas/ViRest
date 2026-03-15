@@ -476,7 +476,7 @@ struct OnboardingView: View {
 
                     VStack(alignment: .leading, spacing: 16) {
                         syncBenefitRow(icon: "person.circle.fill", text: "Give sport recommendations based on your data")
-                        syncBenefitRow(icon: "chart.line.uptrend.xyaxis", text: "Track your fitness progress")
+                        syncBenefitRow(icon: "chart.line.uptrend.xyaxis", text: "Track your RHR and activity progress")
                         syncBenefitRow(icon: "lock.fill", text: "Secure and private")
                     }
 

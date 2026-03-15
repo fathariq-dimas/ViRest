@@ -265,9 +265,10 @@ final class OnboardingViewModel: ObservableObject {
         applySelectedSportSelectionToDraft(selectedSportId: sportId)
     }
 
-    func finalizePendingGuestSubmissionIfNeeded() async {
-        guard case .signedIn(let user) = authService.authState else { return }
-        guard let pendingGuestProfile, let pendingGuestSportPlan else { return }
+    @discardableResult
+    func finalizePendingGuestSubmissionIfNeeded() async -> Bool {
+        guard case .signedIn(let user) = authService.authState else { return false }
+        guard let pendingGuestProfile, let pendingGuestSportPlan else { return false }
 
         do {
             if let existingUser = try await firestoreUserRepository.loadUser(userId: user.id),
@@ -279,18 +280,37 @@ final class OnboardingViewModel: ObservableObject {
                 self.latestGeneratedSportPlan = nil
                 self.latestRecommendationResult = nil
                 self.latestGeneratedHealthSnapshot = nil
-                return
+                return true
             }
+
+            // Register flow: persist draft to local cache after auth succeeds.
+            try userProfileRepository.saveProfile(pendingGuestProfile)
 
             try await firestoreUserRepository.saveProfile(userId: user.id, profile: pendingGuestProfile)
             try await firestoreUserRepository.saveSportPlan(userId: user.id, plan: pendingGuestSportPlan)
+            if let snapshot = latestGeneratedHealthSnapshot {
+                try await firestoreUserRepository.upsertRHRTracking(
+                    userId: user.id,
+                    bpm: snapshot.restingHeartRate,
+                    source: snapshot.restingHeartRateSource,
+                    collectedAt: snapshot.collectedAt
+                )
+            }
+            if let weeklyPlan = latestRecommendationResult?.weeklyPlan {
+                try planRepository.saveCurrentPlan(weeklyPlan)
+                _ = await notificationService.requestAuthorization()
+                notificationService.schedulePlanReminders(for: weeklyPlan)
+            }
+
             self.pendingGuestProfile = nil
             self.pendingGuestSportPlan = nil
             self.latestGeneratedSportPlan = nil
             self.latestRecommendationResult = nil
             self.latestGeneratedHealthSnapshot = nil
+            return true
         } catch {
             errorMessage = error.localizedDescription
+            return false
         }
     }
 
