@@ -127,6 +127,9 @@ struct RuleBasedPlanAdjustmentService: PlanAdjusting {
         case .keep:
             return plan
 
+        case .keepAdjusted, .offerSwitch, .offerSwitchNow, .deloadNextSession:
+            return plan
+
         case .downgradeIntensity:
             plan.sessions = plan.sessions.map { session in
                 let newMax = max(3, session.targetRPE.max - 1)

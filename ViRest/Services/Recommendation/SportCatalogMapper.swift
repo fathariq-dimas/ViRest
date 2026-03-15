@@ -62,7 +62,7 @@ final class SportsCatalogLoader {
                 print("⚠️ Failed to decode \(url.lastPathComponent): \(error)")
             }
         }
-        print("⚠️ Unable to load exercise catalog from sports.json fallback chain")
+        print("⚠️ Unable to load exercise catalog from sports.json")
     }
 
     private func candidateURLs() -> [URL] {
@@ -71,20 +71,10 @@ final class SportsCatalogLoader {
         if let sportsBundled = Bundle.main.url(forResource: "sports", withExtension: "json") {
             urls.append(sportsBundled)
         }
-        if let legacyBundled = Bundle.main.url(forResource: "exercise_matrix_v4_flat", withExtension: "json") {
-            urls.append(legacyBundled)
-        }
-        if let cleanedBundled = Bundle.main.url(
-            forResource: "cleaned_exercise_matrix_grouped_v4_flat",
-            withExtension: "json"
-        ) {
-            urls.append(cleanedBundled)
-        }
 
         let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        urls.append(cwd.appendingPathComponent("ViRest/sports.json"))
         urls.append(cwd.appendingPathComponent("ViRest/Resources/sports.json"))
-        urls.append(cwd.appendingPathComponent("ViRest/Resources/exercise_matrix_v4_flat.json"))
-        urls.append(cwd.appendingPathComponent("ViRest/Resources/cleaned_exercise_matrix_grouped_v4_flat.json"))
 
         return urls
     }

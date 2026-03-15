@@ -62,8 +62,9 @@ final class RewardsViewModel: ObservableObject {
         }
 
         let remaining = max(0, nextTarget - totalActivitiesCount)
+        
         if let nextLevelTitle {
-            return "\(remaining) more activities to reach next level (\(nextLevelTitle))."
+            return "\(remaining) more activities to reach next level."
         }
 
         return "\(remaining) more activities to reach next level."
@@ -79,13 +80,24 @@ final class RewardsViewModel: ObservableObject {
             if localStateChanged {
                 try badgeRepository.saveState(localState)
             }
-            badgeState = localState
 
             guard case .signedIn(let user) = authService.authState else {
+                badgeState = localState
                 return
             }
 
             firestoreUser = try await firestoreUserRepository.loadUser(userId: user.id)
+            if var remoteBadgeState = firestoreUser?.badgeState {
+                let remoteChanged = remoteBadgeState.normalizeRandomCriteriaIfNeeded()
+                badgeState = remoteBadgeState
+                try badgeRepository.saveState(remoteBadgeState)
+                if remoteChanged {
+                    try? await firestoreUserRepository.saveBadgeState(userId: user.id, state: remoteBadgeState)
+                }
+            } else {
+                badgeState = localState
+                try? await firestoreUserRepository.saveBadgeState(userId: user.id, state: localState)
+            }
         } catch {
             errorMessage = error.localizedDescription
         }

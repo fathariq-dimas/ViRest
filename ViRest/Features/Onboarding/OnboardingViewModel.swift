@@ -7,7 +7,8 @@ final class OnboardingViewModel: ObservableObject {
 
     struct RecommendationSummary: Equatable {
         struct SportFactor: Equatable, Identifiable {
-            let id = UUID()
+            let sportId: String
+            var id: String { sportId }
             let sportName: String
             let compatibilityPercent: Int
             let hasProgression: Bool
@@ -20,6 +21,7 @@ final class OnboardingViewModel: ObservableObject {
 
         let primaryActivityName: String
         let sports: [SportFactor]
+        var selectedSportId: String?
     }
 
     enum HealthImportState: Equatable {
@@ -75,6 +77,9 @@ final class OnboardingViewModel: ObservableObject {
     private var didAttemptAutoImport = false
     private var pendingGuestProfile: UserProfileInput?
     private var pendingGuestSportPlan: FirestoreSportPlan?
+    private var latestGeneratedSportPlan: FirestoreSportPlan?
+    private var latestRecommendationResult: RecommendationResult?
+    private var latestGeneratedHealthSnapshot: HealthSnapshot?
 
     init(
         userProfileRepository: UserProfileRepository,
@@ -133,6 +138,9 @@ final class OnboardingViewModel: ObservableObject {
         isHealthKitSynchronized = false
         pendingGuestProfile = nil
         pendingGuestSportPlan = nil
+        latestGeneratedSportPlan = nil
+        latestRecommendationResult = nil
+        latestGeneratedHealthSnapshot = nil
         didAttemptAutoImport = false
     }
 
@@ -241,7 +249,20 @@ final class OnboardingViewModel: ObservableObject {
     }
 
     func continueAfterRecommendation() {
-        onCompleted()
+        Task {
+            await continueAfterRecommendationInternal()
+        }
+    }
+
+    func selectRecommendedSport(_ sportId: String) {
+        guard var summary = recommendationSummary else { return }
+        guard summary.sports.contains(where: { $0.sportId == sportId }) else { return }
+        guard summary.selectedSportId != sportId else { return }
+
+        summary.selectedSportId = sportId
+        recommendationSummary = summary
+        errorMessage = nil
+        applySelectedSportSelectionToDraft(selectedSportId: sportId)
     }
 
     func finalizePendingGuestSubmissionIfNeeded() async {
@@ -249,13 +270,51 @@ final class OnboardingViewModel: ObservableObject {
         guard let pendingGuestProfile, let pendingGuestSportPlan else { return }
 
         do {
+            if let existingUser = try await firestoreUserRepository.loadUser(userId: user.id),
+               existingUser.sportPlan != nil {
+                // Returning account already has an onboarding plan.
+                // Ignore guest onboarding draft to avoid overwriting existing cloud data.
+                self.pendingGuestProfile = nil
+                self.pendingGuestSportPlan = nil
+                self.latestGeneratedSportPlan = nil
+                self.latestRecommendationResult = nil
+                self.latestGeneratedHealthSnapshot = nil
+                return
+            }
+
             try await firestoreUserRepository.saveProfile(userId: user.id, profile: pendingGuestProfile)
             try await firestoreUserRepository.saveSportPlan(userId: user.id, plan: pendingGuestSportPlan)
             self.pendingGuestProfile = nil
             self.pendingGuestSportPlan = nil
+            self.latestGeneratedSportPlan = nil
+            self.latestRecommendationResult = nil
+            self.latestGeneratedHealthSnapshot = nil
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    private func continueAfterRecommendationInternal() async {
+        guard let summary = recommendationSummary else { return }
+        guard let selectedSportId = summary.selectedSportId else {
+            errorMessage = "Please choose one recommended sport to continue."
+            return
+        }
+
+        isLoading = true
+        applySelectedSportSelectionToDraft(selectedSportId: selectedSportId)
+        let didPersist = await persistOnboardingDataIfNeeded()
+        isLoading = false
+        guard didPersist else { return }
+
+        if case .signedIn = authService.authState {
+            pendingGuestProfile = nil
+            pendingGuestSportPlan = nil
+            latestGeneratedSportPlan = nil
+            latestRecommendationResult = nil
+            latestGeneratedHealthSnapshot = nil
+        }
+        onCompleted()
     }
 
     private func submitInternal() async {
@@ -273,39 +332,35 @@ final class OnboardingViewModel: ObservableObject {
         let goalFrequency = derivedGoalFrequency()
 
         do {
-            // 1. Save profile locally (existing logic)
-            try userProfileRepository.saveProfile(profile)
-            try planRepository.saveGoal(goalFrequency)
-
-            // 2. Generate recommendations from sports catalog and derive persisted sport plan phases
+            // 1. Generate recommendations from sports catalog and keep result as draft first.
             let snapshot = await healthService.fetchLatestSnapshot(profile: profile)
+            latestGeneratedHealthSnapshot = snapshot
             let request = RecommendationRequest(
                 userProfile: profile, healthSnapshot: snapshot,
                 goalFrequency: goalFrequency, weekStartDate: Date()
             )
             let result = recommendationEngine.recommend(request: request)
-            let recommendedSports = [result.primary] + result.alternatives
+            latestRecommendationResult = result
+            let rawRecommendedSports = [result.primary] + result.alternatives
+            let notSuitableSportIds = await loadNotSuitableSportIdsForCurrentUser()
+            let recommendedSports = rawRecommendedSports.filter {
+                !notSuitableSportIds.contains(Self.normalizedToken($0.displayName))
+            }
+
+            if recommendedSports.isEmpty {
+                errorMessage = "No suitable sports available because previous not suitable flags filtered your matches. Try adjusting your answers."
+                isLoading = false
+                return
+            }
             let sportPlan = buildSportPlan(
                 profile: profile,
+                snapshot: snapshot,
                 recommendedSports: recommendedSports,
                 fallbackWeeklySessions: max(1, result.weeklyPlan.sessions.count)
             )
+            latestGeneratedSportPlan = sportPlan
             pendingGuestProfile = profile
             pendingGuestSportPlan = sportPlan
-
-            // 3. Save to Firestore
-            if case .signedIn(let user) = authService.authState {
-                try await firestoreUserRepository.saveProfile(userId: user.id, profile: profile)
-                try await firestoreUserRepository.saveSportPlan(userId: user.id, plan: sportPlan)
-                pendingGuestProfile = nil
-                pendingGuestSportPlan = nil
-            }
-
-            // 4. Keep existing local plan for offline support
-            try planRepository.saveCurrentPlan(result.weeklyPlan)
-
-            _ = await notificationService.requestAuthorization()
-            notificationService.schedulePlanReminders(for: result.weeklyPlan)
 
             let maxScore = recommendedSports.map(\.score).max() ?? 1
             let planBySportName = Dictionary(
@@ -315,7 +370,7 @@ final class OnboardingViewModel: ObservableObject {
             )
 
             recommendationSummary = RecommendationSummary(
-                primaryActivityName: result.primary.displayName,
+                primaryActivityName: recommendedSports.first?.displayName ?? result.primary.displayName,
                 sports: recommendedSports.map { recommendation in
                     let matchedPlan = planBySportName[Self.normalizedToken(recommendation.displayName)]
                     let initial = matchedPlan?.resolvedInitialPrescription
@@ -329,6 +384,7 @@ final class OnboardingViewModel: ObservableObject {
                         ?? (resolvedWeekOneFrequency != resolvedWeekTwoPlusFrequency || resolvedWeekOneDuration != resolvedWeekTwoPlusDuration)
 
                     return RecommendationSummary.SportFactor(
+                        sportId: matchedPlan?.id ?? Self.normalizedToken(recommendation.displayName),
                         sportName: recommendation.displayName,
                         compatibilityPercent: Self.compatibilityPercent(
                             score: recommendation.score,
@@ -341,7 +397,8 @@ final class OnboardingViewModel: ObservableObject {
                         weekTwoPlusSessionMinutes: resolvedWeekTwoPlusDuration,
                         cautions: recommendation.cautions
                     )
-                }
+                },
+                selectedSportId: sportPlan.resolvedSelectedSportId
             )
 
             isLoading = false
@@ -351,17 +408,23 @@ final class OnboardingViewModel: ObservableObject {
         }
     }
 
+    private func loadNotSuitableSportIdsForCurrentUser() async -> Set<String> {
+        guard case .signedIn(let user) = authService.authState else { return [] }
+        return (try? await firestoreUserRepository.loadNotSuitableSportIds(userId: user.id)) ?? []
+    }
+
     private func buildSportPlan(
         profile: UserProfileInput,
+        snapshot: HealthSnapshot,
         recommendedSports: [SportRecommendation],
         fallbackWeeklySessions: Int
     ) -> FirestoreSportPlan {
         let loader = SportsCatalogLoader.shared
-        let rhrBand = profile.questionnaireCurrentRHRBand?.sportsJsonBand ?? CurrentRHRBandQuestion.from61To75.sportsJsonBand
+        let rhrBand = resolvedSportsJsonRHRBand(profile: profile, snapshot: snapshot)
         let bmiCategory = BMICalculator.category(
             heightCm: profile.heightCm, weightKg: profile.weightKg
         )
-        let weekReset = Date().startOfWeek()
+        let generatedAt = Date()
         var usedSportKeys = Set<String>()
         var sports: [FirestoreSportEntry] = []
 
@@ -395,7 +458,9 @@ final class OnboardingViewModel: ObservableObject {
                     weeklyTargetCount: initialWeekly,
                     completedThisWeek: 0,
                     durationMinutes: initialDuration,
-                    weekResetDate: weekReset,
+                    weekResetDate: generatedAt,
+                    phaseStartDate: generatedAt,
+                    pendingDeloadSessions: 0,
                     hasProgression: hasProgression,
                     initialPrescription: FirestoreSportPrescription(
                         weeklyTargetCount: initialWeekly,
@@ -410,12 +475,98 @@ final class OnboardingViewModel: ObservableObject {
             if sports.count >= 3 { break }
         }
 
-        return FirestoreSportPlan(generatedAt: Date(), sports: sports)
+        return FirestoreSportPlan(
+            generatedAt: generatedAt,
+            sports: sports,
+            selectedSportId: sports.first?.id
+        )
+    }
+
+    private func applySelectedSportSelectionToDraft(selectedSportId: String) {
+        if var generatedPlan = latestGeneratedSportPlan {
+            generatedPlan.selectSport(id: selectedSportId)
+            latestGeneratedSportPlan = generatedPlan
+            pendingGuestSportPlan = generatedPlan
+        } else if var pendingPlan = pendingGuestSportPlan {
+            pendingPlan.selectSport(id: selectedSportId)
+            pendingGuestSportPlan = pendingPlan
+            latestGeneratedSportPlan = pendingPlan
+        }
+    }
+
+    private func persistOnboardingDataIfNeeded() async -> Bool {
+        guard let profile = pendingGuestProfile else { return false }
+        guard let draftedPlan = latestGeneratedSportPlan ?? pendingGuestSportPlan else { return false }
+        
+        guard case .signedIn(let user) = authService.authState else { return true }
+        
+        do {
+            let existingPlan = try await firestoreUserRepository.loadUser(userId: user.id)?.sportPlan
+            let planToPersist = mergedPlanPreservingProgress(
+                newPlan: draftedPlan,
+                existingPlan: existingPlan
+            )
+            latestGeneratedSportPlan = planToPersist
+            pendingGuestSportPlan = planToPersist
+
+            try userProfileRepository.saveProfile(profile)
+            try await firestoreUserRepository.saveProfile(userId: user.id, profile: profile)
+            try await firestoreUserRepository.saveSportPlan(userId: user.id, plan: planToPersist)
+            if let snapshot = latestGeneratedHealthSnapshot {
+                try await firestoreUserRepository.upsertRHRTracking(
+                    userId: user.id,
+                    bpm: snapshot.restingHeartRate,
+                    source: snapshot.restingHeartRateSource,
+                    collectedAt: snapshot.collectedAt
+                )
+            }
+            if let weeklyPlan = latestRecommendationResult?.weeklyPlan {
+                try planRepository.saveCurrentPlan(weeklyPlan)
+                _ = await notificationService.requestAuthorization()
+                notificationService.schedulePlanReminders(for: weeklyPlan)
+            }
+            return true
+        } catch {
+            errorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func mergedPlanPreservingProgress(
+        newPlan: FirestoreSportPlan,
+        existingPlan: FirestoreSportPlan?
+    ) -> FirestoreSportPlan {
+        guard let existingPlan else { return newPlan }
+
+        var merged = newPlan
+        let existingBySportId = Dictionary(uniqueKeysWithValues: existingPlan.sports.map { ($0.id, $0) })
+
+        for index in merged.sports.indices {
+            let sportId = merged.sports[index].id
+            guard let existingSport = existingBySportId[sportId] else { continue }
+
+            // Preserve per-sport progress/history when the same sport is recommended again.
+            merged.sports[index].completedThisWeek = existingSport.completedThisWeek
+            merged.sports[index].weekResetDate = existingSport.weekResetDate
+            merged.sports[index].phaseStartDate = existingSport.phaseStartDate ?? existingSport.weekResetDate
+            merged.sports[index].pendingDeloadSessions = existingSport.pendingDeloadSessions
+        }
+
+        merged.lastSwitchAt = existingPlan.lastSwitchAt
+        merged.lastSwitchReason = existingPlan.lastSwitchReason
+
+        if merged.resolvedSelectedSportId == nil,
+           let existingSelectedSportId = existingPlan.resolvedSelectedSportId,
+           merged.sports.contains(where: { $0.id == existingSelectedSportId }) {
+            merged.selectedSportId = existingSelectedSportId
+        }
+
+        return merged
     }
 
 
     private func buildProfile() -> UserProfileInput {
-        let resolvedName = fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "ViRest User" : fullName
+        let resolvedName = fullName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "Virest User" : fullName
         let resolvedActivities: [ActivityType] = enjoyableActivities.isEmpty ? [.walking] : Array(enjoyableActivities)
         return UserProfileInput(
             fullName: resolvedName,
@@ -526,10 +677,10 @@ final class OnboardingViewModel: ObservableObject {
         errorMessage = nil
 
         if let height = snapshot.heightCm {
-            heightCmText = String(format: "%.0f", height)
+            heightCmText = formatDecimalInput(height)
         }
         if let weight = snapshot.weightKg {
-            weightKgText = String(format: "%.1f", weight)
+            weightKgText = formatDecimalInput(weight)
         }
         if let rhr = snapshot.restingHeartRate {
             questionnaireCurrentRHRBand = Self.questionBand(from: rhr)
@@ -570,6 +721,31 @@ final class OnboardingViewModel: ObservableObject {
         default:
             return .above90
         }
+    }
+
+    private func resolvedSportsJsonRHRBand(profile: UserProfileInput, snapshot: HealthSnapshot) -> String {
+        if snapshot.restingHeartRateSource == .healthKit,
+           let healthKitRHR = snapshot.restingHeartRate {
+            return Self.questionBand(from: healthKitRHR).sportsJsonBand
+        }
+
+        if let profileBand = profile.questionnaireCurrentRHRBand?.sportsJsonBand {
+            return profileBand
+        }
+
+        if let fallbackRHR = snapshot.restingHeartRate {
+            return Self.questionBand(from: fallbackRHR).sportsJsonBand
+        }
+
+        return CurrentRHRBandQuestion.from61To75.sportsJsonBand
+    }
+
+    private func formatDecimalInput(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if abs(rounded.rounded() - rounded) < 0.01 {
+            return String(format: "%.0f", rounded)
+        }
+        return String(format: "%.1f", rounded)
     }
 
     private static func compatibilityPercent(score: Double, maxScore: Double) -> Int {

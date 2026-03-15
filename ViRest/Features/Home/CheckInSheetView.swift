@@ -11,18 +11,16 @@ struct CheckInSheetView: View {
     @ObservedObject var viewModel: CheckInSheetViewModel
     @Environment(\.dismiss) private var dismiss
     @State private var sheetHeight: CGFloat = 470
+    @State private var showSwitchSelectionSheet = false
+    @State private var activeFeedbackField: FeedbackSelectionField?
 
     var body: some View {
         ZStack {
-            Color(white: 0.08).ignoresSafeArea()
+            AppBottomSheetStyle.backgroundColor.ignoresSafeArea()
 
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 20) {
-                    // Handle bar
-                    Capsule()
-                        .fill(Color.white.opacity(0.2))
-                        .frame(width: 40, height: 4)
-                        .padding(.top, 12)
+                VStack(spacing: AppBottomSheetStyle.contentSpacing) {
+                    AppBottomSheetHandle()
 
                     switch viewModel.state {
                     case .form:
@@ -31,11 +29,14 @@ struct CheckInSheetView: View {
                         resultContent
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 24)
+                .padding(.horizontal, AppBottomSheetStyle.horizontalPadding)
+                .padding(.bottom, AppBottomSheetStyle.bottomPadding)
                 .onIntrinsicHeightChange { contentHeight in
-                    let minHeight: CGFloat = viewModel.state == .form ? 340 : 260
-                    let maxFraction: CGFloat = viewModel.state == .form ? 0.78 : 0.66
+                    let screenHeight = UIScreen.main.bounds.height
+                    let minHeight: CGFloat = viewModel.state == .form
+                        ? max(500, screenHeight * 0.80)
+                        : max(360, screenHeight * 0.55)
+                    let maxFraction: CGFloat = viewModel.state == .form ? 0.96 : 0.82
                     sheetHeight = SheetSizing.fittedHeight(
                         from: contentHeight,
                         minHeight: minHeight,
@@ -45,8 +46,30 @@ struct CheckInSheetView: View {
                 }
             }
         }
-        .presentationDetents([.height(sheetHeight)])
+        .presentationDetents(viewModel.state == .form ? [.large] : [.height(sheetHeight)])
         .presentationDragIndicator(.hidden)
+        .sheet(isPresented: $showSwitchSelectionSheet) {
+            FeedbackSwitchSelectionSheet(
+                viewModel: viewModel,
+                onCancel: {
+                    showSwitchSelectionSheet = false
+                },
+                onConfirm: { sportId, reason in
+                    viewModel.switchSport(to: sportId, reason: reason)
+                    showSwitchSelectionSheet = false
+                }
+            )
+        }
+        .sheet(item: $activeFeedbackField) { field in
+            FeedbackOptionSelectionSheet(
+                title: field.title,
+                options: feedbackOptions(for: field),
+                selectedOptionID: selectedOptionID(for: field),
+                onSelect: { optionID in
+                    applySelection(optionID: optionID, for: field)
+                }
+            )
+        }
     }
 
     // ─── FORM ───────────────────────────────────────
@@ -69,17 +92,29 @@ struct CheckInSheetView: View {
 
             // Difficulty
             questionCard(title: "How difficult was it?", icon: "flame") {
-                AnyView(pickerRow(selection: $viewModel.difficulty, cases: ActivityDifficulty.allCases))
+                AnyView(
+                    feedbackSelectionRow(value: viewModel.difficulty.displayName) {
+                        activeFeedbackField = .difficulty
+                    }
+                )
             }
 
             // Fatigue
             questionCard(title: "How tired do you feel?", icon: "battery.25") {
-                AnyView(pickerRow(selection: $viewModel.fatigue, cases: FatigueLevel.allCases))
+                AnyView(
+                    feedbackSelectionRow(value: viewModel.fatigue.displayName) {
+                        activeFeedbackField = .fatigue
+                    }
+                )
             }
 
             // Pain
             questionCard(title: "Any pain during activity?", icon: "cross.circle") {
-                AnyView(pickerRow(selection: $viewModel.painLevel, cases: PainLevel.allCases))
+                AnyView(
+                    feedbackSelectionRow(value: viewModel.painLevel.displayName) {
+                        activeFeedbackField = .pain
+                    }
+                )
             }
 
             // Discomfort areas (conditional)
@@ -131,6 +166,9 @@ struct CheckInSheetView: View {
             }
             .disabled(viewModel.isLoading)
         }
+        .animation(.none, value: viewModel.difficulty)
+        .animation(.none, value: viewModel.fatigue)
+        .animation(.none, value: viewModel.painLevel)
     }
 
     private var resultContent: some View {
@@ -209,6 +247,48 @@ struct CheckInSheetView: View {
                 }
             }
 
+            if viewModel.shouldOfferSwitch {
+                VStack(spacing: 10) {
+                    Button {
+                        viewModel.prepareSwitchOptions()
+                        showSwitchSelectionSheet = true
+                    } label: {
+                        HStack {
+                            if viewModel.isApplyingDecision || viewModel.isLoadingSwitchOptions {
+                                ProgressView().tint(.white).scaleEffect(0.85)
+                            }
+                            Text("Choose New Sport")
+                                .font(AppTypography.body(15).bold())
+                                .foregroundStyle(.white)
+                        }
+                    }
+                    .buttonStyle(PrimaryActionButtonStyle())
+                    .frame(height: 52)
+                    .disabled(
+                        viewModel.isApplyingDecision
+                        || viewModel.isLoadingSwitchOptions
+                        || !viewModel.hasAlternativeSwitchOption
+                    )
+
+                    Button {
+                        viewModel.continueCurrentSport()
+                    } label: {
+                        Text("Continue Current")
+                            .font(AppTypography.body(15))
+                    }
+                    .buttonStyle(SecondaryActionButtonStyle())
+                    .frame(height: 52)
+                    .disabled(viewModel.isApplyingDecision)
+                }
+            }
+
+            if let decisionMessage = viewModel.decisionMessage {
+                Text(decisionMessage)
+                    .font(AppTypography.caption(13))
+                    .foregroundStyle(AppPalette.accent)
+                    .multilineTextAlignment(.center)
+            }
+
             // Done button
             Button {
                 dismiss()
@@ -238,35 +318,60 @@ struct CheckInSheetView: View {
         .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
 
-    private func pickerRow<T: CaseIterable & Identifiable & Hashable & DisplayNamed>(
-        selection: Binding<T>,
-        cases: [T]
-    ) -> some View {
-        Menu {
-            ForEach(cases) { item in
-                Button {
-                    selection.wrappedValue = item
-                } label: {
-                    HStack {
-                        Text(item.displayName)
-                        if selection.wrappedValue == item {
-                            Image(systemName: "checkmark")
-                        }
-                    }
-                }
-            }
-        } label: {
-            HStack(spacing: 6) {
-                Text(selection.wrappedValue.displayName)
-                Image(systemName: "chevron.up.chevron.down")
+    private func feedbackSelectionRow(value: String, onTap: @escaping () -> Void) -> some View {
+        Button(action: onTap) {
+            HStack(spacing: 8) {
+                Text(value)
+                    .font(AppTypography.body(15))
+                    .foregroundStyle(Color.vibrantGreen)
+                Spacer()
+                Image(systemName: "chevron.down")
                     .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(Color.vibrantGreen)
             }
-            .font(AppTypography.body(15))
-            .foregroundStyle(Color.vibrantGreen)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func feedbackOptions(for field: FeedbackSelectionField) -> [FeedbackOptionItem] {
+        switch field {
+        case .difficulty:
+            return ActivityDifficulty.allCases.map { FeedbackOptionItem(id: $0.rawValue, title: $0.displayName) }
+        case .fatigue:
+            return FatigueLevel.allCases.map { FeedbackOptionItem(id: $0.rawValue, title: $0.displayName) }
+        case .pain:
+            return PainLevel.allCases.map { FeedbackOptionItem(id: $0.rawValue, title: $0.displayName) }
+        }
+    }
+
+    private func selectedOptionID(for field: FeedbackSelectionField) -> String {
+        switch field {
+        case .difficulty:
+            return viewModel.difficulty.rawValue
+        case .fatigue:
+            return viewModel.fatigue.rawValue
+        case .pain:
+            return viewModel.painLevel.rawValue
+        }
+    }
+
+    private func applySelection(optionID: String, for field: FeedbackSelectionField) {
+        switch field {
+        case .difficulty:
+            if let value = ActivityDifficulty(rawValue: optionID) {
+                viewModel.difficulty = value
+            }
+        case .fatigue:
+            if let value = FatigueLevel(rawValue: optionID) {
+                viewModel.fatigue = value
+            }
+        case .pain:
+            if let value = PainLevel(rawValue: optionID) {
+                viewModel.painLevel = value
+            }
+        }
     }
 
     private func chipToggle(label: String, selected: Bool, action: @escaping () -> Void) -> some View {
@@ -375,8 +480,259 @@ struct FlowLayout: Layout {
     }
 }
 
-// Protocol to access displayName generically in pickerRow
-protocol DisplayNamed { var displayName: String { get } }
-extension ActivityDifficulty: DisplayNamed {}
-extension FatigueLevel: DisplayNamed {}
-extension PainLevel: DisplayNamed {}
+private enum FeedbackSelectionField: String, Identifiable {
+    case difficulty
+    case fatigue
+    case pain
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .difficulty: return "How difficult was it?"
+        case .fatigue: return "How tired do you feel?"
+        case .pain: return "Any pain during activity?"
+        }
+    }
+}
+
+private struct FeedbackOptionItem: Identifiable {
+    let id: String
+    let title: String
+}
+
+private struct FeedbackOptionSelectionSheet: View {
+    let title: String
+    let options: [FeedbackOptionItem]
+    let selectedOptionID: String
+    let onSelect: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var sheetHeight: CGFloat = 340
+
+    var body: some View {
+        ZStack {
+            AppBottomSheetStyle.backgroundColor.ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AppBottomSheetStyle.contentSpacing) {
+                    AppBottomSheetHandle()
+
+                    Text(title)
+                        .font(AppTypography.title(20))
+                        .foregroundStyle(.white)
+
+                    VStack(spacing: 10) {
+                        ForEach(options) { option in
+                            let isSelected = option.id == selectedOptionID
+
+                            Button {
+                                onSelect(option.id)
+                                dismiss()
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(isSelected ? AppPalette.accent : AppPalette.textSecondary)
+
+                                    Text(option.title)
+                                        .font(AppTypography.body(15))
+                                        .foregroundStyle(isSelected ? Color.vibrantGreen : .white)
+
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 12)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .fill(Color.white.opacity(0.06))
+                                )
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                        .stroke(isSelected ? AppPalette.accent.opacity(0.85) : Color.white.opacity(0.08), lineWidth: 1)
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+                }
+                .padding(.horizontal, AppBottomSheetStyle.horizontalPadding)
+                .padding(.bottom, AppBottomSheetStyle.bottomPadding)
+                .onIntrinsicHeightChange { contentHeight in
+                    sheetHeight = SheetSizing.fittedHeight(
+                        from: contentHeight,
+                        minHeight: 320,
+                        maxFraction: 0.72,
+                        extra: 12
+                    )
+                }
+            }
+        }
+        .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.hidden)
+    }
+}
+
+private struct FeedbackSwitchSelectionSheet: View {
+    @ObservedObject var viewModel: CheckInSheetViewModel
+    let onCancel: () -> Void
+    let onConfirm: (_ sportId: String, _ reason: SwitchReason) -> Void
+
+    @State private var selectedSportId: String?
+    @State private var selectedReason: SwitchReason = .notSuitable
+    @State private var sheetHeight: CGFloat = 420
+
+    private var canConfirm: Bool {
+        guard let selectedSportId else { return false }
+        guard selectedSportId != viewModel.activeSwitchSportId else { return false }
+        return !viewModel.isApplyingDecision
+    }
+
+    var body: some View {
+        ZStack {
+            AppBottomSheetStyle.backgroundColor.ignoresSafeArea()
+
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: AppBottomSheetStyle.contentSpacing) {
+                    AppBottomSheetHandle()
+
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Switch Sport")
+                            .font(AppTypography.title(22))
+                            .foregroundStyle(.white)
+
+                        Text("This activity looks less suitable. Choose another sport from your current recommendations.")
+                            .font(AppTypography.body(14))
+                            .foregroundStyle(AppPalette.textSecondary)
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Choose Sport")
+                            .font(AppTypography.caption(12))
+                            .foregroundStyle(AppPalette.textSecondary)
+
+                        if viewModel.isLoadingSwitchOptions && viewModel.switchOptions.isEmpty {
+                            HStack(spacing: 10) {
+                                ProgressView().tint(.white)
+                                Text("Loading available sports...")
+                                    .font(AppTypography.body(14))
+                                    .foregroundStyle(AppPalette.textSecondary)
+                            }
+                            .padding(.vertical, 8)
+                        } else {
+                            ForEach(viewModel.switchOptions) { option in
+                                let isCurrent = option.id == viewModel.activeSwitchSportId
+                                let isSelected = option.id == selectedSportId
+
+                                Button {
+                                    guard !isCurrent else { return }
+                                    selectedSportId = option.id
+                                } label: {
+                                    HStack(spacing: 10) {
+                                        Image(systemName: isCurrent ? "lock.circle.fill" : (isSelected ? "checkmark.circle.fill" : "circle"))
+                                            .foregroundStyle(isCurrent ? AppPalette.textSecondary : (isSelected ? AppPalette.accent : AppPalette.textSecondary))
+
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(option.displayName)
+                                                .font(AppTypography.body(14))
+                                                .foregroundStyle(.white)
+                                            Text("\(option.durationMinutes) min/session · \(option.weeklyTargetCount)x/week")
+                                                .font(AppTypography.caption(12))
+                                                .foregroundStyle(AppPalette.textSecondary)
+                                        }
+
+                                        Spacer()
+
+                                        if isCurrent {
+                                            Text("Current")
+                                                .font(AppTypography.caption(11))
+                                                .foregroundStyle(AppPalette.textSecondary)
+                                        }
+                                    }
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 10)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .fill(Color.white.opacity(0.06))
+                                    )
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                            .stroke(isSelected && !isCurrent ? AppPalette.accent.opacity(0.85) : Color.white.opacity(0.08), lineWidth: 1)
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .disabled(isCurrent)
+                                .opacity(isCurrent ? 0.55 : 1)
+                            }
+                        }
+                    }
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Reason")
+                            .font(AppTypography.caption(12))
+                            .foregroundStyle(AppPalette.textSecondary)
+
+                        ForEach(SwitchReason.allCases) { reason in
+                            let isSelected = selectedReason == reason
+                            Button {
+                                selectedReason = reason
+                            } label: {
+                                HStack(spacing: 10) {
+                                    Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                                        .foregroundStyle(isSelected ? AppPalette.accent : AppPalette.textSecondary)
+                                    Text(reason.displayName)
+                                        .font(AppTypography.body(14))
+                                        .foregroundStyle(.white)
+                                    Spacer()
+                                }
+                                .padding(.horizontal, 10)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                        .fill(Color.white.opacity(0.06))
+                                )
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    }
+
+                    HStack(spacing: 10) {
+                        Button("Cancel") {
+                            onCancel()
+                        }
+                        .buttonStyle(SecondaryActionButtonStyle())
+
+                        Button("Confirm Switch") {
+                            guard let selectedSportId else { return }
+                            onConfirm(selectedSportId, selectedReason)
+                        }
+                        .buttonStyle(PrimaryActionButtonStyle())
+                        .disabled(!canConfirm)
+                        .opacity(canConfirm ? 1 : 0.6)
+                    }
+                }
+                .padding(.horizontal, AppBottomSheetStyle.horizontalPadding)
+                .padding(.bottom, AppBottomSheetStyle.bottomPadding)
+                .onIntrinsicHeightChange { contentHeight in
+                    sheetHeight = SheetSizing.fittedHeight(
+                        from: contentHeight,
+                        minHeight: 360,
+                        maxFraction: 0.78,
+                        extra: 12
+                    )
+                }
+            }
+        }
+        .presentationDetents([.height(sheetHeight)])
+        .presentationDragIndicator(.hidden)
+        .onAppear {
+            if selectedSportId == nil || selectedSportId == viewModel.activeSwitchSportId {
+                selectedSportId = viewModel.switchOptions.first(where: { $0.id != viewModel.activeSwitchSportId })?.id
+            }
+        }
+        .onReceive(viewModel.$switchOptions) { options in
+            if selectedSportId == nil || selectedSportId == viewModel.activeSwitchSportId {
+                selectedSportId = options.first(where: { $0.id != viewModel.activeSwitchSportId })?.id
+            }
+        }
+    }
+}

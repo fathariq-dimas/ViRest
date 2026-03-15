@@ -50,4 +50,23 @@ final class SwiftDataKeyValueStore {
             throw AppError.persistence("Failed to save value for key \(key): \(error.localizedDescription)")
         }
     }
+
+    func remove(_ key: String) throws {
+        let context = ModelContext(modelContainer)
+        let descriptor = FetchDescriptor<KeyValueRecord>(predicate: #Predicate { $0.key == key })
+
+        if let existing = try context.fetch(descriptor).first {
+            context.delete(existing)
+            try context.save()
+        }
+    }
+
+    func removeAll() throws {
+        let context = ModelContext(modelContainer)
+        let records = try context.fetch(FetchDescriptor<KeyValueRecord>())
+        for record in records {
+            context.delete(record)
+        }
+        try context.save()
+    }
 }

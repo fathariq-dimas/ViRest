@@ -315,10 +315,20 @@ enum SuitabilityZone: String, Codable {
 
 enum ProgressionDecision: String, Codable {
     case keep
+    case keepAdjusted = "keep_adjusted"
+    case offerSwitch = "offer_switch"
+    case offerSwitchNow = "offer_switch_now"
+    case deloadNextSession = "deload_next_session"
     case downgradeIntensity = "downgrade_intensity"
     case reduceVolume = "reduce_volume"
     case switchAlternative = "switch_alternative"
     case progress
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let raw = try container.decode(String.self)
+        self = ProgressionDecision(rawValue: raw) ?? .keep
+    }
 }
 
 struct SuitabilityAssessment: Codable, Equatable {

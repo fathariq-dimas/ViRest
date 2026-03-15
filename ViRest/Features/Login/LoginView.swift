@@ -21,47 +21,25 @@ struct LoginView: View {
             Spacer()
             
             VStack(spacing: 32) {
-                VStack(spacing: 16) {
-                    Button {
-                        viewModel.signInWithApple()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Text("Login with Apple")
-                                .font(.headline)
-                                .foregroundStyle(Color.vibrantGreen)
+                Button {
+                    viewModel.signInWithGoogle()
+                } label: {
+                    HStack(spacing: 10) {
+                        Text("Login with Google")
+                            .font(.headline)
+                            .foregroundStyle(Color.vibrantGreen)
 
-                            Image(systemName: "apple.logo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 18, height: 18)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                        .frame(maxWidth: .infinity)
+                        Image("googleLogo")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 18, height: 18)
                     }
-                    .buttonStyle(.glass)
-                    .disabled(viewModel.isLoading)
-
-                    Button {
-                        viewModel.signInWithGoogle()
-                    } label: {
-                        HStack(spacing: 10) {
-                            Text("Login with Google")
-                                .font(.headline)
-                                .foregroundStyle(Color.vibrantGreen)
-
-                            Image("googleLogo")
-                                .resizable()
-                                .scaledToFit()
-                                .frame(width: 18, height: 18)
-                        }
-                        .padding(.vertical, 8)
-                        .padding(.horizontal, 16)
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.glass)
-                    .disabled(viewModel.isLoading)
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.glass)
+                .disabled(viewModel.isLoading)
                 
                 HStack(spacing: 16) {
                     Rectangle()

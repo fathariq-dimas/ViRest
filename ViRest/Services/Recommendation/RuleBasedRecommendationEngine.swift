@@ -419,7 +419,7 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
         usedSafetyFallback: Bool
     ) -> [String] {
         var notes: [String] = [
-            "Recommendations are generated from sports.json (with bundled fallback data when needed).",
+            "Recommendations are generated from sports.json.",
             "Target RHR (\(profile.questionnaireTargetRHRGoal?.displayName ?? "-")) is for tracking only and is not used as a recommendation filter.",
             "Preferred exercise time (\(profile.preferredTime.displayName)) is metadata only."
         ]
@@ -484,11 +484,15 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
     }
 
     private func resolvedCurrentRHR(profile: UserProfileInput, snapshot: HealthSnapshot?) -> Int {
+        if snapshot?.restingHeartRateSource == .healthKit,
+           let healthKitRHR = snapshot?.restingHeartRate {
+            return Int(healthKitRHR.rounded())
+        }
         if let questionBand = profile.questionnaireCurrentRHRBand {
             return questionBand.representativeBPM
         }
-        if let rhr = snapshot?.restingHeartRate {
-            return Int(rhr.rounded())
+        if let fallbackRHR = snapshot?.restingHeartRate {
+            return Int(fallbackRHR.rounded())
         }
         return 75
     }

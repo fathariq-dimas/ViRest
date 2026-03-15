@@ -6,7 +6,5 @@
 	<array>
 		<string>group.halo-dek.virest.shared</string>
 	</array>
-	<key>com.apple.developer.healthkit</key>
-	<true/>
 </dict>
 </plist>

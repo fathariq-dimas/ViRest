@@ -13,6 +13,27 @@ enum SheetSizing {
     }
 }
 
+enum AppBottomSheetStyle {
+    static let backgroundColor = Color(white: 0.08)
+    static let handleColor = Color.white.opacity(0.2)
+    static let handleWidth: CGFloat = 40
+    static let handleHeight: CGFloat = 4
+    static let topHandlePadding: CGFloat = 12
+    static let horizontalPadding: CGFloat = 20
+    static let bottomPadding: CGFloat = 24
+    static let contentSpacing: CGFloat = 20
+}
+
+struct AppBottomSheetHandle: View {
+    var body: some View {
+        Capsule()
+            .fill(AppBottomSheetStyle.handleColor)
+            .frame(width: AppBottomSheetStyle.handleWidth, height: AppBottomSheetStyle.handleHeight)
+            .frame(maxWidth: .infinity)
+            .padding(.top, AppBottomSheetStyle.topHandlePadding)
+    }
+}
+
 private struct IntrinsicHeightPreferenceKey: PreferenceKey {
     static var defaultValue: CGFloat = 0
 

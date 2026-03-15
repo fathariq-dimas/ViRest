@@ -6,6 +6,46 @@ enum HealthDataSource: String, Codable {
     case mixed
 }
 
+enum RestingHeartRateValueSource: String, Codable {
+    case healthKit = "health_kit"
+    case manual
+    case unavailable
+}
+
+enum RestingHeartRateTrendRange: String, Codable, CaseIterable, Identifiable, Hashable {
+    case day
+    case week
+    case month
+
+    var id: String { rawValue }
+
+    var compactTitle: String {
+        switch self {
+        case .day: return "D"
+        case .week: return "W"
+        case .month: return "M"
+        }
+    }
+}
+
+struct RestingHeartRateTrendBucket: Codable, Equatable, Identifiable {
+    let bucketStart: Date
+    let averageBPM: Double?
+
+    var id: Date { bucketStart }
+}
+
+struct DailyHealthSnapshot: Codable, Equatable, Identifiable {
+    let dayStart: Date
+    let syncedAt: Date
+    let source: HealthDataSource
+    let restingHeartRate: Double?
+    let heightCm: Double?
+    let weightKg: Double?
+
+    var id: Date { dayStart }
+}
+
 struct HealthSnapshot: Codable, Equatable {
     var collectedAt: Date
     var source: HealthDataSource
@@ -17,6 +57,7 @@ struct HealthSnapshot: Codable, Equatable {
     var weightKg: Double?
     var bmi: Double?
     var restingHeartRate: Double?
+    var restingHeartRateSource: RestingHeartRateValueSource = .unavailable
     var walkingHeartRateAverage: Double?
     var peakHeartRate: Double?
     var heartRateRecovery: Double?
@@ -47,6 +88,7 @@ struct HealthSnapshot: Codable, Equatable {
             weightKg: weightKg,
             bmi: bmi,
             restingHeartRate: resting,
+            restingHeartRateSource: resting == nil ? .unavailable : .manual,
             walkingHeartRateAverage: nil,
             peakHeartRate: nil,
             heartRateRecovery: nil,
@@ -54,6 +96,14 @@ struct HealthSnapshot: Codable, Equatable {
             dataFreshnessHours: nil
         )
     }
+}
+
+struct ResolvedHealthVitals: Equatable {
+    var latestRestingHeartRate: Int?
+    var targetRestingHeartRate: Int?
+    var heightCm: Double?
+    var weightKg: Double?
+    var restingHeartRateSource: RestingHeartRateValueSource
 }
 
 enum HealthAuthorizationState: Equatable {

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct RewardsView: View {
     @ObservedObject private var viewModel: RewardsViewModel
+    private let levelCardIconSlotWidth: CGFloat = 24
+    private let levelCardIconTextSpacing: CGFloat = 12
 
     init(viewModel: RewardsViewModel) {
         self.viewModel = viewModel
@@ -28,7 +30,7 @@ struct RewardsView: View {
                 get: { viewModel.errorMessage != nil },
                 set: { _ in viewModel.errorMessage = nil }
             )) {
-                Button("OK", role: .cancel) { }
+                Button("OK", role: .cancel) {}
             } message: {
                 Text(viewModel.errorMessage ?? "")
             }
@@ -37,15 +39,17 @@ struct RewardsView: View {
 
     private var levelCard: some View {
         SurfaceCard {
-            HStack(spacing: 16) {
+            HStack(spacing: levelCardIconTextSpacing) {
                 Image(systemName: "chart.line.uptrend.xyaxis.circle.fill")
                     .font(.system(size: 24))
                     .foregroundStyle(AppPalette.accent)
+                    .frame(width: levelCardIconSlotWidth, alignment: .center)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Level Progress")
                         .font(AppTypography.caption(12))
                         .foregroundStyle(AppPalette.textSecondary)
+
                     Text(viewModel.levelSummary)
                         .font(AppTypography.title(20))
                         .foregroundStyle(AppPalette.textPrimary)
@@ -53,18 +57,34 @@ struct RewardsView: View {
 
                 Spacer()
 
-                Text("\(viewModel.totalActivitiesCount)")
-                    .font(AppTypography.hero(28))
-                    .foregroundStyle(AppPalette.accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Activities")
+                        .font(AppTypography.caption(12))
+                        .foregroundStyle(AppPalette.textSecondary)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 2) {
+                        Text("\(viewModel.totalActivitiesCount)")
+                            .font(AppTypography.hero(24))
+                            .foregroundStyle(AppPalette.accent)
+
+                        Text("/\(viewModel.resolvedLevel.nextTargetSessions.map(String.init) ?? "-")")
+                            .font(AppTypography.body(16))
+                            .foregroundStyle(AppPalette.textSecondary)
+                    }
+                }
             }
 
-            HStack(alignment: .center, spacing: 8) {
+            HStack(alignment: .center, spacing: levelCardIconTextSpacing) {
                 Image(systemName: "crown.fill")
                     .foregroundStyle(.yellow)
+                    .frame(width: levelCardIconSlotWidth, alignment: .center)
+                
                 Text("Title: \(viewModel.currentTitleName)")
                     .font(AppTypography.body(14))
                     .foregroundStyle(AppPalette.textPrimary)
+
                 Spacer()
+
                 NavigationLink {
                     TitleLevelsView(currentLevel: viewModel.resolvedLevel)
                 } label: {
@@ -73,38 +93,34 @@ struct RewardsView: View {
                         .foregroundStyle(AppPalette.accent)
                 }
             }
+            .padding(.bottom, 8)
 
-            if let nextTarget = viewModel.resolvedLevel.nextTargetSessions {
-                HStack(spacing: 14) {
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Activities")
-                            .font(AppTypography.caption(12))
-                            .foregroundStyle(AppPalette.textSecondary)
-                        Text("\(viewModel.totalActivitiesCount)/\(nextTarget)")
-                            .font(AppTypography.body(16))
-                            .foregroundStyle(AppPalette.textPrimary)
+            HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .top, spacing: levelCardIconTextSpacing) {
+                    Image(systemName: "arrow.up")
+                        .fontWeight(.bold)
+                        .foregroundStyle(.vibrantGreen)
+                        .frame(width: levelCardIconSlotWidth, alignment: .center)
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        if let title = viewModel.nextLevelTitle {
+                            Text(title)
+                                .font(AppTypography.body(16).bold())
+                                .foregroundStyle(AppPalette.accent)
+                        }
+
                         Text(viewModel.nextLevelDetail)
-                            .font(AppTypography.caption(12))
+                            .font(AppTypography.body(12))
                             .foregroundStyle(AppPalette.textSecondary)
                     }
-
-                    Spacer()
-
-                    circularProgressRing(
-                        progress: viewModel.levelProgress,
-                        label: "\(Int((viewModel.levelProgress * 100).rounded()))%"
-                    )
                 }
-            } else {
-                HStack(spacing: 14) {
-                    Text("Maximum level reached.")
-                        .font(AppTypography.caption(12))
-                        .foregroundStyle(AppPalette.textSecondary)
 
-                    Spacer()
+                Spacer()
 
-                    circularProgressRing(progress: 1, label: "100%")
-                }
+                circularProgressRing(
+                    progress: viewModel.levelProgress,
+                    label: "\(Int((viewModel.levelProgress * 100).rounded()))%"
+                )
             }
         }
     }

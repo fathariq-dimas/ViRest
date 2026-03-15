@@ -9,7 +9,7 @@ import Foundation
 import Combine
 
 extension CheckInSheetViewModel: Identifiable {
-    var id: String { sport.id }  // make sport non-private or add a computed id
+    var id: String { sport.id }
 }
 
 @MainActor
@@ -27,6 +27,7 @@ final class CheckInSheetViewModel: ObservableObject {
     @Published var discomfortAreas: Set<DiscomfortArea> = []
     @Published var notes: String = ""
     @Published var isLoading = false
+    @Published var isApplyingDecision = false
     @Published var errorMessage: String?
 
     // Result state
@@ -34,6 +35,11 @@ final class CheckInSheetViewModel: ObservableObject {
     @Published var appreciationText: String?
     @Published var newBadges: [BadgeEarned] = []
     @Published var newTitleName: String?
+    @Published var decisionMessage: String?
+    @Published var switchOptions: [FirestoreSportEntry] = []
+    @Published var activeSwitchSportId: String?
+    @Published var selectedSwitchSportId: String?
+    @Published var isLoadingSwitchOptions = false
 
     private let sport: FirestoreSportEntry
     private let firestoreUserRepository: FirestoreUserRepository
@@ -41,7 +47,10 @@ final class CheckInSheetViewModel: ObservableObject {
     private let badgeRepository: BadgeStateRepository
     private let gamificationService: GamificationProviding
     private let notificationService: NotificationScheduling
-    private let planAdjustmentService: PlanAdjusting
+    private let userProfileRepository: UserProfileRepository
+    private let healthService: HealthDataProviding
+    private let suitabilityEvaluator: SuitabilityEvaluating
+    private let sportSwitchOrchestrator: SportSwitchOrchestrating
 
     // Called when submit succeeds so HomeViewModel can reload
     var onCompleted: (() -> Void)?
@@ -53,7 +62,10 @@ final class CheckInSheetViewModel: ObservableObject {
         badgeRepository: BadgeStateRepository,
         gamificationService: GamificationProviding,
         notificationService: NotificationScheduling,
-        planAdjustmentService: PlanAdjusting
+        userProfileRepository: UserProfileRepository,
+        healthService: HealthDataProviding,
+        suitabilityEvaluator: SuitabilityEvaluating,
+        sportSwitchOrchestrator: SportSwitchOrchestrating
     ) {
         self.sport = sport
         self.firestoreUserRepository = firestoreUserRepository
@@ -61,16 +73,46 @@ final class CheckInSheetViewModel: ObservableObject {
         self.badgeRepository = badgeRepository
         self.gamificationService = gamificationService
         self.notificationService = notificationService
-        self.planAdjustmentService = planAdjustmentService
+        self.userProfileRepository = userProfileRepository
+        self.healthService = healthService
+        self.suitabilityEvaluator = suitabilityEvaluator
+        self.sportSwitchOrchestrator = sportSwitchOrchestrator
+    }
+
+    var shouldOfferSwitch: Bool {
+        guard let decision = assessment?.decision else { return false }
+        return decision == .offerSwitch || decision == .offerSwitchNow
+    }
+
+    var isRedSwitchDecision: Bool {
+        assessment?.decision == .offerSwitchNow
+    }
+
+    var hasAlternativeSwitchOption: Bool {
+        guard let activeSwitchSportId else { return false }
+        return switchOptions.contains(where: { $0.id != activeSwitchSportId })
     }
 
     func submit() {
         Task { await submitInternal() }
     }
 
+    func prepareSwitchOptions() {
+        Task { await loadSwitchOptionsInternal() }
+    }
+
+    func switchSport(to sportId: String, reason: SwitchReason) {
+        Task { await switchSportInternal(requestedSportId: sportId, reason: reason) }
+    }
+
+    func continueCurrentSport() {
+        Task { await continueCurrentSportInternal() }
+    }
+
     private func submitInternal() async {
         isLoading = true
         errorMessage = nil
+        decisionMessage = nil
 
         guard case .signedIn(let user) = authService.authState else {
             errorMessage = "Not authenticated."
@@ -80,22 +122,46 @@ final class CheckInSheetViewModel: ObservableObject {
 
         do {
             let resolvedActivity = activityType(for: sport.displayName)
+            let resolvedDiscomfortAreas: [DiscomfortArea] =
+                painLevel == .noPain ? [] : Array(discomfortAreas)
 
-            // 1. Record check-in counter in Firestore
+            let recentHistory = try await firestoreUserRepository.loadRecentCheckInHistory(
+                userId: user.id,
+                sportId: sport.id,
+                limit: 2
+            )
+
+            assessment = suitabilityEvaluator.evaluate(
+                feedback: SuitabilityFeedbackInput(
+                    difficulty: difficulty,
+                    fatigue: fatigue,
+                    painLevel: painLevel,
+                    discomfortAreas: resolvedDiscomfortAreas
+                ),
+                recentSameSportCheckIns: recentHistory
+            )
+
+            // 1. Record check-in counter in Firestore and consume pending deload if present.
             try await firestoreUserRepository.recordCheckIn(
                 userId: user.id,
                 sportId: sport.id
             )
 
-            // 2. Save check-in history entry
+            // 2. Save check-in history entry with feedback details.
             try await firestoreUserRepository.saveCheckInHistory(
                 userId: user.id,
                 sportId: sport.id,
                 sportName: sport.displayName,
-                durationMinutes: sport.durationMinutes
+                durationMinutes: sport.durationMinutes,
+                difficulty: difficulty,
+                fatigue: fatigue,
+                painLevel: painLevel,
+                discomfortAreas: resolvedDiscomfortAreas,
+                zone: assessment?.zone,
+                decision: assessment?.decision
             )
 
-            // 3. Evaluate gamification (badges + level title) via existing service
+            // 3. Evaluate gamification (badges + level title) via existing service.
             let fakeCheckIn = SessionCheckIn(
                 sessionId: UUID(),
                 checkInDate: Date(),
@@ -104,25 +170,27 @@ final class CheckInSheetViewModel: ObservableObject {
                 activityDifficulty: difficulty,
                 fatigueLevel: fatigue,
                 painLevel: painLevel,
-                discomfortAreas: painLevel == .noPain ? [] : Array(discomfortAreas),
+                discomfortAreas: resolvedDiscomfortAreas,
                 notes: notes
             )
             let existingState = try badgeRepository.loadState()
             let gamification = gamificationService.evaluate(after: fakeCheckIn, current: existingState)
             try badgeRepository.saveState(gamification.updatedState)
+            try await firestoreUserRepository.saveBadgeState(userId: user.id, state: gamification.updatedState)
             appreciationText = gamification.appreciationMessage
             newBadges = gamification.newlyEarnedBadges
             let levelIncreased = gamification.updatedState.level.rawValue > existingState.level.rawValue
             newTitleName = levelIncreased ? gamification.updatedState.level.title : nil
 
-            // 4. Build suitability assessment from answers
-            assessment = buildAssessment()
-
-            // 5. Schedule notifications
+            // 4. Schedule target achieved notification.
             notificationService.scheduleTargetAchievedNotification(for: resolvedActivity)
 
             isLoading = false
             state = .result
+
+            if shouldOfferSwitch {
+                await loadSwitchOptionsInternal()
+            }
             onCompleted?()
 
         } catch {
@@ -131,52 +199,127 @@ final class CheckInSheetViewModel: ObservableObject {
         }
     }
 
-    private func buildAssessment() -> SuitabilityAssessment {
-        let zone: SuitabilityZone
-        let score: Double
-        let decision: ProgressionDecision
-        var reasons: [String] = []
-        let recommendationText: String
+    private func loadSwitchOptionsInternal() async {
+        guard shouldOfferSwitch else {
+            switchOptions = []
+            activeSwitchSportId = nil
+            selectedSwitchSportId = nil
+            return
+        }
+        guard case .signedIn(let user) = authService.authState else { return }
 
-        switch (difficulty, fatigue, painLevel) {
-        case (.tooExhausting, _, _),
-             (_, .completelyExhausted, _),
-             (_, _, .strongPain),
-             (_, _, .moderatePain):
-            zone = .red
-            score = 30
-            decision = .downgradeIntensity
-            reasons.append("Activity was too intense for your current state.")
-            recommendationText = "Rest and recover before your next session."
+        isLoadingSwitchOptions = true
+        defer { isLoadingSwitchOptions = false }
 
-        case (.veryHard, .veryTired, _),
-             (_, .veryTired, _),
-             (_, _, .mildDiscomfort):
-            zone = .yellow
-            score = 55
-            decision = .reduceVolume
-            reasons.append("Consider reducing intensity next session.")
-            recommendationText = "You are making progress. Ease up slightly if needed."
+        do {
+            guard let loadedUser = try await firestoreUserRepository.loadUser(userId: user.id),
+                  let currentPlan = loadedUser.sportPlan else {
+                throw SportSwitchError.invalidPlanState
+            }
 
-        default:
-            zone = .green
-            score = 85
-            decision = .keep
-            reasons.append("Great effort — activity level looks appropriate.")
-            recommendationText = "Keep going — this activity suits you well."
+            let resolvedSports = currentPlan.resolvedSports(at: Date())
+            let activeId = currentPlan.resolvedSelectedSportId ?? sport.id
+            let notSuitableSportIds = try await firestoreUserRepository.loadNotSuitableSportIds(userId: user.id)
+            let filteredOptions = resolvedSports.filter {
+                $0.id == activeId || !notSuitableSportIds.contains($0.id)
+            }
+            let usableOptions = filteredOptions
+
+            switchOptions = usableOptions
+            activeSwitchSportId = activeId
+            selectedSwitchSportId = usableOptions.first(where: { $0.id != activeId })?.id
+            if selectedSwitchSportId == nil {
+                decisionMessage = "No alternative sport is currently available from your safe recommendations."
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func switchSportInternal(requestedSportId: String, reason: SwitchReason) async {
+        guard shouldOfferSwitch else { return }
+        guard case .signedIn(let user) = authService.authState else { return }
+
+        isApplyingDecision = true
+        errorMessage = nil
+        decisionMessage = nil
+
+        defer {
+            isApplyingDecision = false
         }
 
-        if painLevel != .noPain {
-            reasons.append("Pain was reported — monitor this area next session.")
+        do {
+            guard let loadedUser = try await firestoreUserRepository.loadUser(userId: user.id),
+                  let currentPlan = loadedUser.sportPlan else {
+                throw SportSwitchError.invalidPlanState
+            }
+            guard requestedSportId != (currentPlan.resolvedSelectedSportId ?? sport.id) else {
+                throw SportSwitchError.noCandidateAvailable
+            }
+
+            let localProfile = try? userProfileRepository.loadProfile()
+            let snapshot = await healthService.fetchLatestSnapshot(profile: localProfile)
+            let origin: SwitchOrigin = isRedSwitchDecision ? .feedbackRed : .feedbackYellowPattern
+
+            let outcome = try await sportSwitchOrchestrator.requestSportSwitch(
+                userId: user.id,
+                currentPlan: currentPlan,
+                requestedSportId: requestedSportId,
+                reason: reason,
+                origin: origin,
+                userProfile: localProfile,
+                healthSnapshot: snapshot,
+                preferredReminderTime: localProfile?.resolvedReminderDateComponents ?? PreferredTime.flexible.reminderDateComponents
+            )
+
+            decisionMessage = "Switched to \(outcome.selectedSport.displayName). Week 1 restarted."
+            onCompleted?()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func continueCurrentSportInternal() async {
+        guard case .signedIn(let user) = authService.authState else { return }
+        guard assessment?.decision == .offerSwitchNow else {
+            decisionMessage = "Continuing current sport."
+            return
         }
 
-        return SuitabilityAssessment(
-            zone: zone,
-            score: score,
-            reasons: reasons,
-            decision: decision,
-            recommendationText: recommendationText
-        )
+        isApplyingDecision = true
+        errorMessage = nil
+        decisionMessage = nil
+
+        defer {
+            isApplyingDecision = false
+        }
+
+        do {
+            guard let loadedUser = try await firestoreUserRepository.loadUser(userId: user.id),
+                  var plan = loadedUser.sportPlan else {
+                throw SportSwitchError.invalidPlanState
+            }
+
+            let activeId = plan.resolvedSelectedSportId ?? sport.id
+            for index in plan.sports.indices where plan.sports[index].id == activeId {
+                plan.sports[index].pendingDeloadSessions = max(1, plan.sports[index].pendingDeloadSessions)
+            }
+
+            try await firestoreUserRepository.saveSportPlan(userId: user.id, plan: plan)
+
+            let localProfile = try? userProfileRepository.loadProfile()
+            let resolvedSports = plan.resolvedSports(at: Date())
+            let activeSports = resolvedSports.filter { $0.id == plan.resolvedSelectedSportId }
+            notificationService.scheduleFirestorePlanReminder(
+                sports: activeSports.isEmpty ? resolvedSports : activeSports,
+                preferredTime: localProfile?.resolvedReminderDateComponents ?? PreferredTime.flexible.reminderDateComponents
+            )
+
+            decisionMessage = "Next session will be deloaded for safety, then re-evaluated."
+            onCompleted?()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     private func activityType(for sportName: String) -> ActivityType {

@@ -6,6 +6,38 @@ struct ExerciseSeedCatalog: Decodable {
     let environmentOptions: [String]
     let healthConcernContraindicationOptions: [String]
     let exercises: [ExerciseSeedExercise]
+
+    private enum CodingKeys: String, CodingKey {
+        case rhrBands
+        case bmiCategories
+        case environmentOptions
+        case healthConcernContraindicationOptions
+        case exercises
+    }
+
+    init(
+        rhrBands: [String],
+        bmiCategories: [String],
+        environmentOptions: [String],
+        healthConcernContraindicationOptions: [String],
+        exercises: [ExerciseSeedExercise]
+    ) {
+        self.rhrBands = rhrBands
+        self.bmiCategories = bmiCategories
+        self.environmentOptions = environmentOptions
+        self.healthConcernContraindicationOptions = healthConcernContraindicationOptions
+        self.exercises = exercises
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.rhrBands = try container.decodeIfPresent([String].self, forKey: .rhrBands) ?? []
+        self.bmiCategories = try container.decodeIfPresent([String].self, forKey: .bmiCategories) ?? []
+        self.environmentOptions = try container.decodeIfPresent([String].self, forKey: .environmentOptions) ?? []
+        self.healthConcernContraindicationOptions =
+            try container.decodeIfPresent([String].self, forKey: .healthConcernContraindicationOptions) ?? []
+        self.exercises = try container.decodeIfPresent([ExerciseSeedExercise].self, forKey: .exercises) ?? []
+    }
 }
 
 struct ExerciseSeedExercise: Decodable {
@@ -139,23 +171,9 @@ enum ExerciseSeedLoader {
             urls.append(sportsBundled)
         }
 
-        if let bundled = Bundle.main.url(forResource: "exercise_matrix_v4_flat", withExtension: "json") {
-            urls.append(bundled)
-        }
-
-        if let bundledOriginal = Bundle.main.url(
-            forResource: "cleaned_exercise_matrix_grouped_v4_flat",
-            withExtension: "json"
-        ) {
-            urls.append(bundledOriginal)
-        }
-
         let cwdURL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        urls.append(cwdURL.appendingPathComponent("ViRest/sports.json"))
         urls.append(cwdURL.appendingPathComponent("ViRest/Resources/sports.json"))
-        urls.append(cwdURL.appendingPathComponent("ViRest/Resources/exercise_matrix_v4_flat.json"))
-
-        let downloadsURL = URL(fileURLWithPath: "/Users/tomoya/Downloads/cleaned_exercise_matrix_grouped_v4_flat.json")
-        urls.append(downloadsURL)
 
         return urls
     }

@@ -117,7 +117,6 @@ enum PreviewSupport {
 
         do {
             try container.userProfileRepository.saveProfile(profile)
-            try container.planRepository.saveGoal(goal)
             try container.planRepository.saveCurrentPlan(plan)
             try container.badgeStateRepository.saveState(badges)
         } catch {
@@ -193,6 +192,7 @@ final class PreviewHealthDataService: HealthDataProviding {
             weightKg: weightKg,
             bmi: bmi,
             restingHeartRate: Double(resolvedProfile.questionnaireCurrentRHRBand?.representativeBPM ?? 68),
+            restingHeartRateSource: .healthKit,
             walkingHeartRateAverage: 96,
             peakHeartRate: 141,
             heartRateRecovery: 19,
@@ -200,13 +200,54 @@ final class PreviewHealthDataService: HealthDataProviding {
             dataFreshnessHours: 2
         )
     }
+
+    func fetchRestingHeartRateTrend(
+        range: RestingHeartRateTrendRange,
+        profile: UserProfileInput?
+    ) async -> [RestingHeartRateTrendBucket] {
+        let baseBPM = Double(profile?.questionnaireCurrentRHRBand?.representativeBPM ?? 68)
+        let calendar = Calendar.current
+        let now = Date()
+
+        switch range {
+        case .day:
+            let currentHour = calendar.dateInterval(of: .hour, for: now)?.start ?? now
+            let firstHour = calendar.date(byAdding: .hour, value: -23, to: currentHour) ?? currentHour
+            return (0..<24).compactMap { index in
+                guard let date = calendar.date(byAdding: .hour, value: index, to: firstHour) else { return nil }
+                let ratio = Double(index) / 23.0
+                let bpm = baseBPM + sin(ratio * Double.pi * 2) * 2.0 + cos(ratio * Double.pi * 3) * 0.8
+                return RestingHeartRateTrendBucket(bucketStart: date, averageBPM: bpm)
+            }
+
+        case .week:
+            let today = calendar.startOfDay(for: now)
+            let firstDay = calendar.date(byAdding: .day, value: -6, to: today) ?? today
+            return (0..<7).compactMap { index in
+                guard let date = calendar.date(byAdding: .day, value: index, to: firstDay) else { return nil }
+                let ratio = Double(index) / 6.0
+                let bpm = baseBPM + sin(ratio * Double.pi * 2) * 3.0
+                return RestingHeartRateTrendBucket(bucketStart: date, averageBPM: bpm)
+            }
+
+        case .month:
+            let firstWeek = calendar.date(byAdding: .weekOfYear, value: -3, to: now.startOfWeek()) ?? now.startOfWeek()
+            return (0..<4).compactMap { index in
+                guard let date = calendar.date(byAdding: .weekOfYear, value: index, to: firstWeek) else { return nil }
+                let ratio = Double(index) / 3.0
+                let bpm = baseBPM + sin(ratio * Double.pi * 1.5) * 3.5
+                return RestingHeartRateTrendBucket(bucketStart: date, averageBPM: bpm)
+            }
+        }
+    }
 }
 
 @MainActor
 final class PreviewNotificationService: NotificationScheduling {
     func requestAuthorization() async -> Bool { true }
+    func isAuthorizationGranted() async -> Bool { true }
     func schedulePlanReminders(for plan: WeeklyPlan) { }
-    func scheduleFirestorePlanReminder(sports: [FirestoreSportEntry], preferredHour: Int) { }
+    func scheduleFirestorePlanReminder(sports: [FirestoreSportEntry], preferredTime: DateComponents) { }
     func scheduleTargetAchievedNotification(for activity: ActivityType) { }
     func clearPlanReminders() { }
 }

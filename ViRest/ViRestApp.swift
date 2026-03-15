@@ -16,6 +16,7 @@ struct ViRestApp: App {
         )
 
         Self.configureNavigationBarAppearance()
+        Self.configureSegmentedControlAppearance()
     }
 
     var body: some Scene {
@@ -34,5 +35,27 @@ struct ViRestApp: App {
         UINavigationBar.appearance().standardAppearance = appearance
         UINavigationBar.appearance().compactAppearance = appearance
         UINavigationBar.appearance().scrollEdgeAppearance = appearance
+    }
+
+    private static func configureSegmentedControlAppearance() {
+        let appearance = UISegmentedControl.appearance()
+        appearance.backgroundColor = .clear
+        appearance.selectedSegmentTintColor = UIColor.white.withAlphaComponent(0.14)
+
+        appearance.setTitleTextAttributes([
+            .foregroundColor: UIColor.white,
+            .font: UIFont(name: "AvenirNext-Medium", size: 13) ?? UIFont.systemFont(ofSize: 13, weight: .medium)
+        ], for: .normal)
+
+        let selectedAttributes: [NSAttributedString.Key: Any] = [
+            .foregroundColor: UIColor(Color.vibrantGreen),
+            .font: UIFont(name: "AvenirNext-DemiBold", size: 13) ?? UIFont.systemFont(ofSize: 13, weight: .semibold)
+        ]
+        appearance.setTitleTextAttributes(selectedAttributes, for: .selected)
+        appearance.setTitleTextAttributes(selectedAttributes, for: .highlighted)
+        appearance.setTitleTextAttributes(
+            selectedAttributes,
+            for: UIControl.State(rawValue: UIControl.State.selected.rawValue | UIControl.State.highlighted.rawValue)
+        )
     }
 }

@@ -27,7 +27,14 @@ final class FirestoreUserRepository {
             try ref.setData(from: newUser)
         } else {
             // Returning user: update lastActiveAt
-            try await ref.updateData(["lastActiveAt": FieldValue.serverTimestamp()])
+            var data: [String: Any] = [
+                "lastActiveAt": FieldValue.serverTimestamp()
+            ]
+            let trimmedName = authUser.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !trimmedName.isEmpty {
+                data["displayName"] = trimmedName
+            }
+            try await ref.updateData(data)
         }
     }
 
@@ -38,15 +45,152 @@ final class FirestoreUserRepository {
         return user
     }
 
+    func loadBadgeState(userId: String) async throws -> BadgeState? {
+        try await loadUser(userId: userId)?.badgeState
+    }
+
+    func loadSportSuitabilityFlags(userId: String) async throws -> [String: FirestoreSportSuitabilityFlag] {
+        try await loadUser(userId: userId)?.sportSuitabilityFlags ?? [:]
+    }
+
+    func loadNotSuitableSportIds(userId: String) async throws -> Set<String> {
+        let flags = try await loadSportSuitabilityFlags(userId: userId)
+        return Set(
+            flags.compactMap { key, value in
+                value.isNotSuitable ? key : nil
+            }
+        )
+    }
+
+    @discardableResult
+    func registerSportSwitchFeedback(
+        userId: String,
+        sportId: String,
+        reason: SwitchReason,
+        origin: SwitchOrigin
+    ) async throws -> [String: FirestoreSportSuitabilityFlag] {
+        let ref = db.collection("users").document(userId)
+        let snapshot = try await ref.getDocument()
+        let currentUser = snapshot.exists ? try snapshot.data(as: FirestoreUser.self) : nil
+
+        var flags = currentUser?.sportSuitabilityFlags ?? [:]
+        var entry = flags[sportId] ?? FirestoreSportSuitabilityFlag()
+        entry.register(reason: reason, origin: origin, at: Date())
+        flags[sportId] = entry
+
+        let encodedFlags = try Firestore.Encoder().encode(flags)
+        try await ref.setData([
+            "sportSuitabilityFlags": encodedFlags,
+            "lastActiveAt": FieldValue.serverTimestamp()
+        ], merge: true)
+
+        if cachedUser?.id == userId {
+            cachedUser?.sportSuitabilityFlags = flags
+        }
+        return flags
+    }
+
+    @discardableResult
+    func clearSportNotSuitableFlag(
+        userId: String,
+        sportId: String
+    ) async throws -> [String: FirestoreSportSuitabilityFlag] {
+        let ref = db.collection("users").document(userId)
+        let snapshot = try await ref.getDocument()
+        let currentUser = snapshot.exists ? try snapshot.data(as: FirestoreUser.self) : nil
+
+        var flags = currentUser?.sportSuitabilityFlags ?? [:]
+        guard var entry = flags[sportId] else { return flags }
+
+        entry.isNotSuitable = false
+        entry.notSuitableAt = nil
+        entry.lastUpdatedAt = Date()
+        flags[sportId] = entry
+
+        let encodedFlags = try Firestore.Encoder().encode(flags)
+        try await ref.setData([
+            "sportSuitabilityFlags": encodedFlags,
+            "lastActiveAt": FieldValue.serverTimestamp()
+        ], merge: true)
+
+        if cachedUser?.id == userId {
+            cachedUser?.sportSuitabilityFlags = flags
+        }
+        return flags
+    }
+
+    func saveBadgeState(userId: String, state: BadgeState) async throws {
+        let ref = db.collection("users").document(userId)
+        let encodedState = try Firestore.Encoder().encode(state)
+        try await ref.setData([
+            "badgeState": encodedState,
+            "badgeStateUpdatedAt": Date(),
+            "lastActiveAt": FieldValue.serverTimestamp()
+        ], merge: true)
+    }
+
+    func upsertRHRTracking(
+        userId: String,
+        bpm: Double?,
+        source: RestingHeartRateValueSource,
+        collectedAt: Date
+    ) async throws {
+        guard let bpm, let mappedSource = FirestoreRHRSource(snapshotSource: source) else {
+            return
+        }
+
+        let ref = db.collection("users").document(userId)
+        let snapshot = try await ref.getDocument()
+        let existingUser = snapshot.exists ? try snapshot.data(as: FirestoreUser.self) : nil
+        let existingTracking = existingUser?.rhrTracking
+
+        let updatedTracking: FirestoreRHRTracking
+        if var existingTracking {
+            let shouldReplaceManualBaseline = existingTracking.baselineSource == .manual && mappedSource == .healthKit
+            if shouldReplaceManualBaseline {
+                existingTracking.baselineBPM = bpm
+                existingTracking.baselineAt = collectedAt
+                existingTracking.baselineSource = .healthKit
+            }
+
+            existingTracking.latestBPM = bpm
+            existingTracking.latestAt = collectedAt
+            existingTracking.latestSource = mappedSource
+            existingTracking.lastHealthSyncAt = Date()
+            updatedTracking = existingTracking
+        } else {
+            updatedTracking = FirestoreRHRTracking(
+                baselineBPM: bpm,
+                baselineAt: collectedAt,
+                baselineSource: mappedSource,
+                latestBPM: bpm,
+                latestAt: collectedAt,
+                latestSource: mappedSource,
+                lastHealthSyncAt: Date()
+            )
+        }
+
+        let encodedTracking = try Firestore.Encoder().encode(updatedTracking)
+        try await ref.setData([
+            "rhrTracking": encodedTracking,
+            "lastActiveAt": FieldValue.serverTimestamp()
+        ], merge: true)
+    }
+
     func saveProfile(userId: String, profile: UserProfileInput) async throws {
         let ref = db.collection("users").document(userId)
-        let data: [String: Any] = [
+        var data: [String: Any] = [
             "age": profile.age as Any,
             "restingHeartRate": profile.questionnaireCurrentRHRBand?.representativeBPM as Any,
             "targetRestingHeartRate": profile.questionnaireTargetRHRGoal?.representativeBPM as Any,
-            "displayName": profile.fullName,
+            "heightCm": profile.heightCm as Any,
+            "weightKg": profile.weightKg as Any,
             "lastActiveAt": FieldValue.serverTimestamp()
         ]
+        let trimmedName = profile.fullName.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmedName.isEmpty {
+            data["displayName"] = trimmedName
+        }
         try await ref.updateData(data)
     }
 
@@ -82,8 +226,23 @@ final class FirestoreUserRepository {
             guard var user = try? snapshot.data(as: FirestoreUser.self),
                   var plan = user.sportPlan else { return nil }
 
+            let now = Date()
+            for i in plan.sports.indices {
+                let currentCycleStart = plan.sports[i].currentCycleStart(
+                    at: now,
+                    defaultStart: plan.generatedAt
+                )
+                if plan.sports[i].weekResetDate < currentCycleStart {
+                    plan.sports[i].completedThisWeek = 0
+                    plan.sports[i].weekResetDate = currentCycleStart
+                }
+            }
+
             for i in plan.sports.indices where plan.sports[i].id == sportId {
                 plan.sports[i].completedThisWeek += 1
+                if plan.sports[i].pendingDeloadSessions > 0 {
+                    plan.sports[i].pendingDeloadSessions -= 1
+                }
             }
             user.sportPlan = plan
             if let encoded = try? Firestore.Encoder().encode(plan) {
@@ -123,13 +282,25 @@ final class FirestoreUserRepository {
         userId: String,
         sportId: String,
         sportName: String,
-        durationMinutes: Int
+        durationMinutes: Int,
+        difficulty: ActivityDifficulty? = nil,
+        fatigue: FatigueLevel? = nil,
+        painLevel: PainLevel? = nil,
+        discomfortAreas: [DiscomfortArea] = [],
+        zone: SuitabilityZone? = nil,
+        decision: ProgressionDecision? = nil
     ) async throws {
         let entry = CheckInHistoryEntry(
             sportId: sportId,
             sportName: sportName,
-            date: Date(),
-            durationMinutes: durationMinutes
+            createdAt: Date(),
+            durationMinutes: durationMinutes,
+            difficulty: difficulty,
+            fatigue: fatigue,
+            painLevel: painLevel,
+            discomfortAreas: discomfortAreas,
+            zone: zone,
+            decision: decision
         )
         let ref = db.collection("users").document(userId)
             .collection("checkIns").document()
@@ -145,23 +316,21 @@ final class FirestoreUserRepository {
         return try snapshot.documents.map { try $0.data(as: CheckInHistoryEntry.self) }
     }
 
-}
-
-private extension TargetRHRGoalQuestion {
-    var representativeBPM: Int {
-        switch self {
-        case .from90To99:
-            return 95
-        case .from80To89:
-            return 85
-        case .from70To79:
-            return 75
-        case .from60To69:
-            return 65
-        case .from50To59:
-            return 55
-        case .below50:
-            return 48
-        }
+    func loadRecentCheckInHistory(
+        userId: String,
+        sportId: String,
+        limit: Int = 3
+    ) async throws -> [CheckInHistoryEntry] {
+        let snapshot = try await db.collection("users").document(userId)
+            .collection("checkIns")
+            .order(by: "date", descending: true)
+            .limit(to: max(limit * 8, 24))
+            .getDocuments()
+        return try snapshot.documents
+            .map { try $0.data(as: CheckInHistoryEntry.self) }
+            .filter { $0.sportId == sportId }
+            .prefix(limit)
+            .map { $0 }
     }
+
 }

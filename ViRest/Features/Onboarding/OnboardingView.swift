@@ -88,6 +88,7 @@ struct OnboardingView: View {
     @State private var lastValidWeightInput: String = ""
     @State private var lastValidHeightInput: String = ""
     @State private var hideHealthSyncHero = false
+    @State private var hasAcceptedMedicalDisclaimer = false
     @State private var scrollProxy: ScrollViewProxy?
     private let onExitFromFirstQuestion: () -> Void
     private let topAnchorID = "onboarding_top_anchor"
@@ -146,6 +147,7 @@ struct OnboardingView: View {
             }
             .onChange(of: viewModel.recommendationSummary) { _, summary in
                 guard summary != nil else { return }
+                hasAcceptedMedicalDisclaimer = false
                 phase = .summary
                 scrollToTop()
             }
@@ -187,7 +189,11 @@ struct OnboardingView: View {
                             .padding(.vertical, 8)
                             .frame(maxWidth: .infinity)
                     }
-                    .disabled(viewModel.isLoading)
+                    .disabled(
+                        viewModel.isLoading
+                        || viewModel.recommendationSummary?.selectedSportId == nil
+                        || !hasAcceptedMedicalDisclaimer
+                    )
                     .buttonStyle(.glass)
                 }
             }
@@ -416,15 +422,15 @@ struct OnboardingView: View {
         }
     }
 
-    private var isRHRFieldLocked: Bool {
+    private var isRHRMappedFromHealthKit: Bool {
         viewModel.isHealthKitSynchronized && viewModel.importedHealthSnapshot?.restingHeartRate != nil
     }
 
-    private var isWeightFieldLocked: Bool {
+    private var isWeightMappedFromHealthKit: Bool {
         viewModel.isHealthKitSynchronized && viewModel.importedHealthSnapshot?.weightKg != nil
     }
 
-    private var isHeightFieldLocked: Bool {
+    private var isHeightMappedFromHealthKit: Bool {
         viewModel.isHealthKitSynchronized && viewModel.importedHealthSnapshot?.heightCm != nil
     }
 
@@ -514,11 +520,11 @@ struct OnboardingView: View {
 
                 VStack(spacing: 12) {
                     ForEach(stepOptions) { option in
-                        optionRow(option, isEnabled: !isRHRFieldLocked)
+                        optionRow(option)
                     }
                 }
 
-                if isRHRFieldLocked {
+                if isRHRMappedFromHealthKit {
                     Text("Mapped from Apple Health")
                         .font(.footnote)
                         .foregroundStyle(Color.slateGray)
@@ -543,11 +549,10 @@ struct OnboardingView: View {
                 numericInputCard(
                     placeholder: "Number input in kg",
                     unit: "kg",
-                    text: $viewModel.weightKgText,
-                    isEnabled: !isWeightFieldLocked
+                    text: $viewModel.weightKgText
                 )
 
-                if isWeightFieldLocked {
+                if isWeightMappedFromHealthKit {
                     Text("Mapped from Apple Health")
                         .font(.footnote)
                         .foregroundStyle(Color.slateGray)
@@ -572,11 +577,10 @@ struct OnboardingView: View {
                 numericInputCard(
                     placeholder: "Number input in cm",
                     unit: "cm",
-                    text: $viewModel.heightCmText,
-                    isEnabled: !isHeightFieldLocked
+                    text: $viewModel.heightCmText
                 )
 
-                if isHeightFieldLocked {
+                if isHeightMappedFromHealthKit {
                     Text("Mapped from Apple Health")
                         .font(.footnote)
                         .foregroundStyle(Color.slateGray)
@@ -599,11 +603,22 @@ struct OnboardingView: View {
                     .font(.title3)
                     .foregroundStyle(Color.slateGray)
 
+                Text("Choose one active sport for your Home plan. Other recommendations stay available but locked.")
+                    .font(.footnote)
+                    .foregroundStyle(Color.slateGray.opacity(0.9))
+
                 VStack(spacing: 14) {
                     ForEach(summary.sports) { sport in
-                        sportProgramCard(sport)
+                        sportProgramCard(
+                            sport,
+                            isSelected: summary.selectedSportId == sport.sportId
+                        ) {
+                            viewModel.selectRecommendedSport(sport.sportId)
+                        }
                     }
                 }
+
+                medicalDisclaimerConsentCard
             }
             .padding(.bottom, 110)
         } else {
@@ -619,82 +634,140 @@ struct OnboardingView: View {
         }
     }
 
-    private func sportProgramCard(_ sport: OnboardingViewModel.RecommendationSummary.SportFactor) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(alignment: .top, spacing: 10) {
-                Text(sport.sportName)
-                    .font(.title2.bold())
-                    .foregroundStyle(.white)
+    private var medicalDisclaimerConsentCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Medical Notice")
+                .font(.headline)
+                .foregroundStyle(.white)
 
-                Spacer()
+            Text("Virest provides exercise recommendations and does not replace medical advice. Please consult a qualified healthcare professional for diagnosis and treatment decisions.")
+                .font(.footnote)
+                .foregroundStyle(Color.slateGray)
+                .fixedSize(horizontal: false, vertical: true)
 
-                Text("\(sport.compatibilityPercent)% Match")
-                    .font(.headline)
-                    .foregroundStyle(Color.vibrantGreen)
-            }
-
-            if sport.hasProgression {
-                Text("Progressive plan")
+            Toggle(isOn: $hasAcceptedMedicalDisclaimer) {
+                Text("I understand and agree to continue with this recommendation.")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(Color.vibrantGreen)
+                    .foregroundStyle(.white)
+            }
+            .tint(.vibrantGreen)
+        }
+        .padding(.vertical, 14)
+        .padding(.horizontal, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
 
-                HStack(spacing: 10) {
-                    phaseInfoCard(
-                        title: "Week 1",
+    private func sportProgramCard(
+        _ sport: OnboardingViewModel.RecommendationSummary.SportFactor,
+        isSelected: Bool,
+        onSelect: @escaping () -> Void
+    ) -> some View {
+        Button(action: onSelect) {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack(alignment: .top, spacing: 10) {
+                    Text(sport.sportName)
+                        .font(.title2.bold())
+                        .foregroundStyle(.white)
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 6) {
+                        if isSelected {
+                            Text("Selected")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(Color.vibrantGreen)
+                        }
+
+                        Text("\(sport.compatibilityPercent)% Match")
+                            .font(.headline)
+                            .foregroundStyle(Color.vibrantGreen)
+                    }
+                }
+
+                if sport.hasProgression {
+                    Text("Progressive plan")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(Color.vibrantGreen)
+
+                    Text("Week 1 uses initial adaptation. Starting week 2, your plan automatically moves to target intensity.")
+                        .font(.caption)
+                        .foregroundStyle(Color.slateGray)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 10) {
+                        phaseInfoCard(
+                            title: "Week 1",
+                            durationMinutes: sport.weekOneSessionMinutes,
+                            frequencyPerWeek: sport.weekOneFrequency
+                        )
+                        phaseInfoCard(
+                            title: "Week 2+",
+                            durationMinutes: sport.weekTwoPlusSessionMinutes,
+                            frequencyPerWeek: sport.weekTwoPlusFrequency
+                        )
+                    }
+                } else {
+                    standardInfoCard(
                         durationMinutes: sport.weekOneSessionMinutes,
                         frequencyPerWeek: sport.weekOneFrequency
                     )
-                    phaseInfoCard(
-                        title: "Week 2+",
-                        durationMinutes: sport.weekTwoPlusSessionMinutes,
-                        frequencyPerWeek: sport.weekTwoPlusFrequency
-                    )
                 }
-            } else {
-                standardInfoCard(
-                    durationMinutes: sport.weekOneSessionMinutes,
-                    frequencyPerWeek: sport.weekOneFrequency
-                )
-            }
 
-            if !sport.cautions.isEmpty {
-                HStack(alignment: .top, spacing: 10) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .font(.headline)
-                        .foregroundStyle(Color.yellow.opacity(0.95))
-                    
-                    VStack(alignment: .leading, spacing: 6) {
-                        Text("Cautions")
-                            .font(.headline)
-                            .foregroundStyle(Color.yellow.opacity(0.95))
-                        
-                        ForEach(Array(sport.cautions.prefix(3).enumerated()), id: \.offset) { _, caution in
-                            Text("• \(caution)")
-                                .font(.subheadline.bold())
-                                .foregroundStyle(Color.white.opacity(0.95))
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if !sport.cautions.isEmpty {
+                    cautionInfoCard(cautions: sport.cautions)
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
-                .frame(maxWidth: .infinity)
-                .background(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .fill(Color.yellow.opacity(0.16))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .stroke(Color.yellow.opacity(0.55), lineWidth: 1)
-                )
             }
+            .padding(.vertical, 16)
+            .padding(.horizontal, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.white.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(isSelected ? Color.vibrantGreen.opacity(0.9) : Color.white.opacity(0.08), lineWidth: isSelected ? 2 : 1)
+            )
         }
-        .padding(.vertical, 16)
-        .padding(.horizontal, 16)
+        .buttonStyle(StaticPressButtonStyle())
+    }
+
+    private func cautionInfoCard(cautions: [String]) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.headline)
+                .foregroundStyle(Color.yellow.opacity(0.95))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Cautions")
+                    .font(.headline)
+                    .foregroundStyle(Color.yellow.opacity(0.95))
+
+                ForEach(Array(cautions.prefix(3)), id: \.self) { caution in
+                    Text("• \(caution)")
+                        .font(.subheadline.bold())
+                        .foregroundStyle(Color.white.opacity(0.95))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
         .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(Color.yellow.opacity(0.16))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color.yellow.opacity(0.55), lineWidth: 1)
         )
     }
 
@@ -845,6 +918,7 @@ struct OnboardingView: View {
         baselineWeightError = nil
         baselineHeightError = nil
         hideHealthSyncHero = false
+        hasAcceptedMedicalDisclaimer = false
 
         viewModel.resetForNewOnboarding()
 
@@ -869,16 +943,14 @@ struct OnboardingView: View {
             // 0-3 digit integer, optional decimal with max 1 digit (e.g. 70, 70.5, 120.0)
             return #"^[0-9]{0,3}(?:\.[0-9]{0,1})?$"#
         case .height:
-            // Integer only, up to 3 digits (e.g. 165, 180)
-            return #"^[0-9]{0,3}$"#
+            // 0-3 digit integer, optional decimal with max 1 digit (e.g. 165, 165.5, 180.0)
+            return #"^[0-9]{0,3}(?:\.[0-9]{0,1})?$"#
         }
     }
 
     private func normalizeInput(_ value: String, kind: NumericInputKind) -> String {
         switch kind {
-        case .height:
-            return value.filter(\.isNumber)
-        case .weight:
+        case .height, .weight:
             var result = ""
             var hasDecimalSeparator = false
 

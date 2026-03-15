@@ -48,14 +48,8 @@ struct RegisterView: View {
             Spacer()
 
             VStack(spacing: 32) {
-                VStack(spacing: 16) {
-                    authButton("Sign up with Apple", icon: "apple.logo") {
-                        viewModel.signInWithApple()
-                    }
-
-                    authButton("Sign up with Google", image: "googleLogo") {
-                        viewModel.signInWithGoogle()
-                    }
+                authButton("Sign up with Google", image: "googleLogo") {
+                    viewModel.signInWithGoogle()
                 }
 
                 HStack(spacing: 16) {

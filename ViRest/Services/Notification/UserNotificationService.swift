@@ -17,6 +17,17 @@ final class UserNotificationService: NotificationScheduling {
         }
     }
 
+    func isAuthorizationGranted() async -> Bool {
+        await withCheckedContinuation { continuation in
+            center.getNotificationSettings { settings in
+                let authorized = settings.authorizationStatus == .authorized
+                    || settings.authorizationStatus == .provisional
+                    || settings.authorizationStatus == .ephemeral
+                continuation.resume(returning: authorized)
+            }
+        }
+    }
+
     func schedulePlanReminders(for plan: WeeklyPlan) {
         clearPlanReminders()
 
@@ -33,16 +44,16 @@ final class UserNotificationService: NotificationScheduling {
         var components = DateComponents()
         switch preferredTime {
         case .morning:
-            components.hour = 7
+            components.hour = 6
             components.minute = 0
         case .midday:
             components.hour = 12
-            components.minute = 15
+            components.minute = 0
         case .evening:
-            components.hour = 18
-            components.minute = 30
+            components.hour = 17
+            components.minute = 0
         case .flexible:
-            components.hour = 19
+            components.hour = 17
             components.minute = 0
         }
 
@@ -68,6 +79,29 @@ final class UserNotificationService: NotificationScheduling {
             trigger: trigger
         )
 
+        center.add(request)
+    }
+
+    func scheduleProgressionPhaseActivatedNotification(
+        sportName: String,
+        targetDurationMinutes: Int,
+        targetWeeklyFrequency: Int
+    ) {
+        let content = UNMutableNotificationContent()
+        content.title = "Program phase updated"
+        content.body =
+            "\(sportName) is now in target phase: \(targetDurationMinutes) min/session, "
+            + "\(targetWeeklyFrequency)x/week."
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(timeInterval: 2, repeats: false)
+        let identifier = "plan-reminder-target-phase-\(normalizedToken(sportName))"
+        center.removePendingNotificationRequests(withIdentifiers: [identifier])
+        let request = UNNotificationRequest(
+            identifier: identifier,
+            content: content,
+            trigger: trigger
+        )
         center.add(request)
     }
 
@@ -140,7 +174,7 @@ final class UserNotificationService: NotificationScheduling {
         center.add(UNNotificationRequest(identifier: "mid-week-nudge", content: content, trigger: trigger))
     }
 
-    func scheduleFirestorePlanReminder(sports: [FirestoreSportEntry], preferredHour: Int = 19) {
+    func scheduleFirestorePlanReminder(sports: [FirestoreSportEntry], preferredTime: DateComponents) {
         // Clear existing plan reminders first
         clearPlanReminders()
 
@@ -163,8 +197,8 @@ final class UserNotificationService: NotificationScheduling {
         content.sound = .default
 
         var components = DateComponents()
-        components.hour = preferredHour
-        components.minute = 0
+        components.hour = preferredTime.hour ?? 17
+        components.minute = preferredTime.minute ?? 0
 
         let trigger = UNCalendarNotificationTrigger(dateMatching: components, repeats: true)
         let request = UNNotificationRequest(
@@ -173,6 +207,14 @@ final class UserNotificationService: NotificationScheduling {
             trigger: trigger
         )
         center.add(request)
-        print("🔔 Plan reminder scheduled for \(preferredHour):00 — pending: \(sportNames)")
+        print("🔔 Plan reminder scheduled for \(components.hour ?? 17):\(String(format: "%02d", components.minute ?? 0)) — pending: \(sportNames)")
+    }
+
+    private func normalizedToken(_ value: String) -> String {
+        value
+            .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+            .replacingOccurrences(of: "[^a-z0-9]+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+            .lowercased()
     }
 }

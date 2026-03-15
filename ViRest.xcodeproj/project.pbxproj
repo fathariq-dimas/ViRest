@@ -12,10 +12,36 @@
 		4234CD9A2F6261A7004553F3 /* GoogleSignIn in Frameworks */ = {isa = PBXBuildFile; productRef = 4234CD992F6261A7004553F3 /* GoogleSignIn */; };
 		4234CD9C2F6261A7004553F3 /* GoogleSignInSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 4234CD9B2F6261A7004553F3 /* GoogleSignInSwift */; };
 		4234CDA52F641CAF004553F3 /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 4234CDA42F641CAF004553F3 /* FirebaseFirestore */; };
+		90A1B2C32F70000100A1B2C3 /* ViRestWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 90A1B2C42F70000100A1B2C3 /* ViRestWidget.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		90A1B2CA2F70000100A1B2C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 64211DB62F61338500A95CBF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 90A1B2C92F70000100A1B2C3;
+			remoteInfo = ViRestWidget;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		90A1B2C72F70000100A1B2C3 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				90A1B2C32F70000100A1B2C3 /* ViRestWidget.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		64211DBE2F61338500A95CBF /* ViRest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ViRest.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		90A1B2C42F70000100A1B2C3 /* ViRestWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ViRestWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -26,6 +52,13 @@
 			);
 			target = 64211DBD2F61338500A95CBF /* ViRest */;
 		};
+		90A1B2C52F70000100A1B2C3 /* Exceptions for "ViRestWidget" folder in "ViRestWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 90A1B2C92F70000100A1B2C3 /* ViRestWidget */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -35,6 +68,14 @@
 				4234CDA02F6267DD004553F3 /* Exceptions for "ViRest" folder in "ViRest" target */,
 			);
 			path = ViRest;
+			sourceTree = "<group>";
+		};
+		90A1B2C62F70000100A1B2C3 /* ViRestWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				90A1B2C52F70000100A1B2C3 /* Exceptions for "ViRestWidget" folder in "ViRestWidget" target */,
+			);
+			path = ViRestWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -52,6 +93,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		90A1B2C82F70000100A1B2C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -66,6 +114,7 @@
 			isa = PBXGroup;
 			children = (
 				64211DC02F61338500A95CBF /* ViRest */,
+				90A1B2C62F70000100A1B2C3 /* ViRestWidget */,
 				4234CDA32F641CAF004553F3 /* Frameworks */,
 				64211DBF2F61338500A95CBF /* Products */,
 			);
@@ -75,6 +124,7 @@
 			isa = PBXGroup;
 			children = (
 				64211DBE2F61338500A95CBF /* ViRest.app */,
+				90A1B2C42F70000100A1B2C3 /* ViRestWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -89,10 +139,12 @@
 				64211DBA2F61338500A95CBF /* Sources */,
 				64211DBB2F61338500A95CBF /* Frameworks */,
 				64211DBC2F61338500A95CBF /* Resources */,
+				90A1B2C72F70000100A1B2C3 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				90A1B2CB2F70000100A1B2C3 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				64211DC02F61338500A95CBF /* ViRest */,
@@ -109,6 +161,28 @@
 			productReference = 64211DBE2F61338500A95CBF /* ViRest.app */;
 			productType = "com.apple.product-type.application";
 		};
+		90A1B2C92F70000100A1B2C3 /* ViRestWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 90A1B2D02F70000100A1B2C3 /* Build configuration list for PBXNativeTarget "ViRestWidget" */;
+			buildPhases = (
+				90A1B2CD2F70000100A1B2C3 /* Sources */,
+				90A1B2C82F70000100A1B2C3 /* Frameworks */,
+				90A1B2CC2F70000100A1B2C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				90A1B2C62F70000100A1B2C3 /* ViRestWidget */,
+			);
+			name = ViRestWidget;
+			packageProductDependencies = (
+			);
+			productName = ViRestWidget;
+			productReference = 90A1B2C42F70000100A1B2C3 /* ViRestWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -120,6 +194,9 @@
 				LastUpgradeCheck = 2630;
 				TargetAttributes = {
 					64211DBD2F61338500A95CBF = {
+						CreatedOnToolsVersion = 26.3;
+					};
+					90A1B2C92F70000100A1B2C3 = {
 						CreatedOnToolsVersion = 26.3;
 					};
 				};
@@ -143,12 +220,20 @@
 			projectRoot = "";
 			targets = (
 				64211DBD2F61338500A95CBF /* ViRest */,
+				90A1B2C92F70000100A1B2C3 /* ViRestWidget */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		64211DBC2F61338500A95CBF /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		90A1B2CC2F70000100A1B2C3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -165,7 +250,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		90A1B2CD2F70000100A1B2C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		90A1B2CB2F70000100A1B2C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 90A1B2C92F70000100A1B2C3 /* ViRestWidget */;
+			targetProxy = 90A1B2CA2F70000100A1B2C3 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		64211DC92F61338600A95CBF /* Debug */ = {
@@ -292,7 +392,7 @@
 				CODE_SIGN_ENTITLEMENTS = ViRest/ViRest.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 882Y5X32WU;
+				DEVELOPMENT_TEAM = U8V6C9PU58;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -310,10 +410,10 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tomo-dev.ViRest";
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -336,7 +436,7 @@
 				CODE_SIGN_ENTITLEMENTS = ViRest/ViRest.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 882Y5X32WU;
+				DEVELOPMENT_TEAM = U8V6C9PU58;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
@@ -354,10 +454,10 @@
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "tomo-dev.ViRest";
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				REGISTER_APP_GROUPS = YES;
 				SDKROOT = auto;
@@ -369,6 +469,62 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
+		90A1B2CE2F70000100A1B2C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ViRestWidget/ViRestWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U8V6C9PU58;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ViRestWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest.widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		90A1B2CF2F70000100A1B2C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = ViRestWidget/ViRestWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = U8V6C9PU58;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = ViRestWidget/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest.widget";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = auto;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;
 		};
@@ -389,6 +545,15 @@
 			buildConfigurations = (
 				64211DCC2F61338600A95CBF /* Debug */,
 				64211DCD2F61338600A95CBF /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		90A1B2D02F70000100A1B2C3 /* Build configuration list for PBXNativeTarget "ViRestWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				90A1B2CE2F70000100A1B2C3 /* Debug */,
+				90A1B2CF2F70000100A1B2C3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

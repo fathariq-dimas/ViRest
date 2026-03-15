@@ -308,7 +308,7 @@ enum ProgressionLevel: Int, Codable, CaseIterable {
         case .level7: return "Endurance Ranger"
         case .level8: return "Consistency Captain"
         case .level9: return "Performance Pro"
-        case .level10: return "ViRest Legend"
+        case .level10: return "Virest Legend"
         }
     }
 

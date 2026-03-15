@@ -6,10 +6,12 @@ import UserNotifications
 final class HomeViewModel: ObservableObject {
     @Published var firestoreUser: FirestoreUser?
     @Published var currentTitle: String = ""
-    @Published var profileName: String = "ViRest User"
+    @Published var profileName: String = "Virest User"
     @Published var currentRestingHRText: String = "-"
+    @Published var currentRestingHRValue: Int?
     @Published var currentWeightText: String = "-"
     @Published var currentHeightText: String = "-"
+    @Published private(set) var restingHeartRateTrend: [RestingHeartRateTrendRange: [RestingHeartRateTrendBucket]] = [:]
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var checkInSuccess: String?
@@ -22,33 +24,72 @@ final class HomeViewModel: ObservableObject {
     private let userProfileRepository: UserProfileRepository
     private let authService: AuthProviding
     private let healthService: HealthDataProviding
+    private let healthDataResolver: HealthDataResolving
     private let notificationService: NotificationScheduling
     private let gamificationService: GamificationProviding
     private let badgeRepository: BadgeStateRepository
-    private let planAdjustmentService: PlanAdjusting
+    private let suitabilityEvaluator: SuitabilityEvaluating
+    private let sportSwitchOrchestrator: SportSwitchOrchestrating
+    private let widgetSyncService: WidgetSyncService
+    private var preferredReminderTime: DateComponents = PreferredTime.flexible.reminderDateComponents
+
+    private struct TargetPhaseTransitionInfo {
+        let sportName: String
+        let targetDurationMinutes: Int
+        let targetWeeklyFrequency: Int
+    }
 
     init(
         firestoreUserRepository: FirestoreUserRepository,
         userProfileRepository: UserProfileRepository,
         authService: AuthProviding,
         healthService: HealthDataProviding,
+        healthDataResolver: HealthDataResolving,
         notificationService: NotificationScheduling,
         gamificationService: GamificationProviding,
         badgeRepository: BadgeStateRepository,
-        planAdjustmentService: PlanAdjusting
+        suitabilityEvaluator: SuitabilityEvaluating,
+        sportSwitchOrchestrator: SportSwitchOrchestrating,
+        widgetSyncService: WidgetSyncService
     ) {
         self.firestoreUserRepository = firestoreUserRepository
         self.userProfileRepository = userProfileRepository
         self.authService = authService
         self.healthService = healthService
+        self.healthDataResolver = healthDataResolver
         self.notificationService = notificationService
         self.gamificationService = gamificationService
         self.badgeRepository = badgeRepository
-        self.planAdjustmentService = planAdjustmentService
+        self.suitabilityEvaluator = suitabilityEvaluator
+        self.sportSwitchOrchestrator = sportSwitchOrchestrator
+        self.widgetSyncService = widgetSyncService
     }
 
     var sports: [FirestoreSportEntry] {
         firestoreUser?.sportPlan?.resolvedSports(at: Date()) ?? []
+    }
+
+    var selectedSportId: String? {
+        firestoreUser?.sportPlan?.resolvedSelectedSportId
+    }
+
+    func isSportLocked(_ sport: FirestoreSportEntry) -> Bool {
+        firestoreUser?.sportPlan?.isSportLocked(sport) ?? false
+    }
+
+    func preferredSportForCheckIn() -> FirestoreSportEntry? {
+        let resolvedSports = sports
+        if let selectedSportId,
+           let selectedSport = resolvedSports.first(where: { $0.id == selectedSportId }),
+           !isSportLocked(selectedSport) {
+            return selectedSport
+        }
+
+        return resolvedSports.first(where: { !isSportLocked($0) })
+    }
+
+    func restingHeartRateTrendBuckets(for range: RestingHeartRateTrendRange) -> [RestingHeartRateTrendBucket] {
+        restingHeartRateTrend[range] ?? []
     }
 
     func load() {
@@ -67,8 +108,11 @@ final class HomeViewModel: ObservableObject {
             await loadInternal()
 
             // Reschedule reminder based on current progress
-            let sports = firestoreUser?.sportPlan?.sports ?? []
-            notificationService.scheduleFirestorePlanReminder(sports: sports, preferredHour: 19)
+            let reminderSports = reminderSportsForNotification()
+            notificationService.scheduleFirestorePlanReminder(
+                sports: reminderSports,
+                preferredTime: preferredReminderTime
+            )
 
             checkInSuccess = "Session logged!"
         }
@@ -82,7 +126,10 @@ final class HomeViewModel: ObservableObject {
             badgeRepository: badgeRepository,
             gamificationService: gamificationService,
             notificationService: notificationService,
-            planAdjustmentService: planAdjustmentService
+            userProfileRepository: userProfileRepository,
+            healthService: healthService,
+            suitabilityEvaluator: suitabilityEvaluator,
+            sportSwitchOrchestrator: sportSwitchOrchestrator
         )
         vm.onCompleted = { [weak self] in
             self?.reloadAfterCheckIn()
@@ -92,30 +139,69 @@ final class HomeViewModel: ObservableObject {
 
     private func loadInternal() async {
         isLoading = true
+        errorMessage = nil
         guard case .signedIn(let user) = authService.authState else {
+            widgetSyncService.clear()
             // Reschedule reminder reflecting current weekly progress
-            let sports = firestoreUser?.sportPlan?.sports ?? []
-            notificationService.scheduleFirestorePlanReminder(sports: sports, preferredHour: 19)
+            let reminderSports = reminderSportsForNotification()
+            notificationService.scheduleFirestorePlanReminder(
+                sports: reminderSports,
+                preferredTime: preferredReminderTime
+            )
             isLoading = false; return
         }
-        do {
-            var loadedBadgeState = try badgeRepository.loadState()
-            let didChangeBadgeState = loadedBadgeState.normalizeRandomCriteriaIfNeeded()
-            if didChangeBadgeState {
-                try badgeRepository.saveState(loadedBadgeState)
-            }
+        var localBadgeState = (try? badgeRepository.loadState()) ?? .default
+        let didChangeLocalBadgeState = localBadgeState.normalizeRandomCriteriaIfNeeded()
+        if didChangeLocalBadgeState {
+            try? badgeRepository.saveState(localBadgeState)
+        }
 
-            firestoreUser = try await firestoreUserRepository.loadUser(userId: user.id)
-            let localProfile = try userProfileRepository.loadProfile()
-            currentTitle = loadedBadgeState.level.title
-            updateProfileName(localProfile: localProfile)
-            await updateVitals(localProfile: localProfile)
+        firestoreUser = try? await firestoreUserRepository.loadUser(userId: user.id)
+        let resolvedBadgeState: BadgeState
+        if var remoteBadgeState = firestoreUser?.badgeState {
+            let remoteChanged = remoteBadgeState.normalizeRandomCriteriaIfNeeded()
+            resolvedBadgeState = remoteBadgeState
+            try? badgeRepository.saveState(remoteBadgeState)
+            if remoteChanged {
+                try? await firestoreUserRepository.saveBadgeState(userId: user.id, state: remoteBadgeState)
+            }
+        } else {
+            resolvedBadgeState = localBadgeState
+            try? await firestoreUserRepository.saveBadgeState(userId: user.id, state: localBadgeState)
+        }
+
+        let localProfile = try? userProfileRepository.loadProfile()
+        currentTitle = resolvedBadgeState.level.title
+        updateProfileName(localProfile: localProfile)
+        await updateVitals(localProfile: localProfile)
+        await updateRestingHeartRateTrend(localProfile: localProfile)
+        preferredReminderTime = localProfile?.resolvedReminderDateComponents ?? PreferredTime.flexible.reminderDateComponents
+
+        do {
             try await resetWeeklyCountersIfNeeded(userId: user.id)
-            isLoading = false
         } catch {
             errorMessage = error.localizedDescription
-            isLoading = false
         }
+
+        await publishWidgetSnapshot(localProfile: localProfile)
+        let reminderSports = reminderSportsForNotification()
+        notificationService.scheduleFirestorePlanReminder(
+            sports: reminderSports,
+            preferredTime: preferredReminderTime
+        )
+        isLoading = false
+    }
+
+    private func updateRestingHeartRateTrend(localProfile: UserProfileInput?) async {
+        async let dayTrend = healthService.fetchRestingHeartRateTrend(range: .day, profile: localProfile)
+        async let weekTrend = healthService.fetchRestingHeartRateTrend(range: .week, profile: localProfile)
+        async let monthTrend = healthService.fetchRestingHeartRateTrend(range: .month, profile: localProfile)
+
+        restingHeartRateTrend = [
+            .day: await dayTrend,
+            .week: await weekTrend,
+            .month: await monthTrend
+        ]
     }
 
     private func updateProfileName(localProfile: UserProfileInput?) {
@@ -125,38 +211,46 @@ final class HomeViewModel: ObservableObject {
             return
         }
 
+        if case .signedIn(let authUser) = authService.authState {
+            let authName = authUser.displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+            if !authName.isEmpty {
+                profileName = authName
+                return
+            }
+        }
+
         let remoteName = firestoreUser?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines)
         if let remoteName, !remoteName.isEmpty {
             profileName = remoteName
             return
         }
 
-        profileName = "ViRest User"
+        profileName = "Virest User"
     }
 
     private func updateVitals(localProfile: UserProfileInput?) async {
-        let snapshot = await healthService.fetchLatestSnapshot(profile: localProfile)
-
-        let resolvedHeight = snapshot.heightCm ?? localProfile?.heightCm
-        let resolvedWeight = snapshot.weightKg ?? localProfile?.weightKg
-        let resolvedRHR = snapshot.restingHeartRate.map { Int($0.rounded()) }
-            ?? localProfile?.questionnaireCurrentRHRBand?.representativeBPM
-            ?? firestoreUser?.restingHeartRate
+        let resolvedVitals = await healthDataResolver.resolveVitals(
+            localProfile: localProfile,
+            firestoreUser: firestoreUser
+        )
+        let resolvedRHR = resolvedVitals.latestRestingHeartRate
 
         if let resolvedRHR {
+            currentRestingHRValue = resolvedRHR
             currentRestingHRText = "\(resolvedRHR) bpm"
         } else {
+            currentRestingHRValue = nil
             currentRestingHRText = "-"
         }
 
-        if let resolvedWeight {
+        if let resolvedWeight = resolvedVitals.weightKg {
             currentWeightText = formatWeight(resolvedWeight)
         } else {
             currentWeightText = "-"
         }
 
-        if let resolvedHeight {
-            currentHeightText = String(format: "%.0f cm", resolvedHeight)
+        if let resolvedHeight = resolvedVitals.heightCm {
+            currentHeightText = formatHeight(resolvedHeight)
         } else {
             currentHeightText = "-"
         }
@@ -170,17 +264,104 @@ final class HomeViewModel: ObservableObject {
         return String(format: "%.1f kg", rounded)
     }
 
+    private func formatHeight(_ value: Double) -> String {
+        let rounded = (value * 10).rounded() / 10
+        if abs(rounded.rounded() - rounded) < 0.01 {
+            return String(format: "%.0f cm", rounded)
+        }
+        return String(format: "%.1f cm", rounded)
+    }
+
     private func resetWeeklyCountersIfNeeded(userId: String) async throws {
         guard var plan = firestoreUser?.sportPlan else { return }
-        let weekStart = Date().startOfWeek()
-        guard plan.sports.contains(where: { $0.weekResetDate < weekStart }) else { return }
+        let now = Date()
+        let selectedSportId = plan.resolvedSelectedSportId
+        var didResetAnyCycle = false
+        var targetPhaseTransition: TargetPhaseTransitionInfo?
 
         for i in plan.sports.indices {
+            let sport = plan.sports[i]
+            let nextCycleStart = sport.currentCycleStart(at: now, defaultStart: plan.generatedAt)
+            guard sport.weekResetDate < nextCycleStart else { continue }
+
+            if targetPhaseTransition == nil,
+               sport.id == selectedSportId {
+                targetPhaseTransition = detectTargetPhaseTransition(
+                    sport: sport,
+                    nextCycleStart: nextCycleStart,
+                    planGeneratedAt: plan.generatedAt
+                )
+            }
+
             plan.sports[i].completedThisWeek = 0
-            plan.sports[i].weekResetDate = weekStart
+            plan.sports[i].weekResetDate = nextCycleStart
+            didResetAnyCycle = true
         }
+        guard didResetAnyCycle else { return }
+
         firestoreUser?.sportPlan = plan
         try await firestoreUserRepository.saveSportPlan(userId: userId, plan: plan)
+
+        if let transition = targetPhaseTransition {
+            notificationService.scheduleProgressionPhaseActivatedNotification(
+                sportName: transition.sportName,
+                targetDurationMinutes: transition.targetDurationMinutes,
+                targetWeeklyFrequency: transition.targetWeeklyFrequency
+            )
+        }
+    }
+
+    private func detectTargetPhaseTransition(
+        sport: FirestoreSportEntry,
+        nextCycleStart: Date,
+        planGeneratedAt: Date
+    ) -> TargetPhaseTransitionInfo? {
+        guard sport.hasProgression else { return nil }
+
+        let previousWeekIndex = sport.programWeekIndex(
+            at: sport.weekResetDate,
+            defaultStart: planGeneratedAt
+        )
+        let currentWeekIndex = sport.programWeekIndex(
+            at: nextCycleStart,
+            defaultStart: planGeneratedAt
+        )
+        guard previousWeekIndex <= 1, currentWeekIndex >= 2 else { return nil }
+
+        let target = sport.resolvedTargetPrescription
+        return TargetPhaseTransitionInfo(
+            sportName: sport.displayName,
+            targetDurationMinutes: target.durationMinutes,
+            targetWeeklyFrequency: target.weeklyTargetCount
+        )
+    }
+
+    private func reminderSportsForNotification() -> [FirestoreSportEntry] {
+        guard let plan = firestoreUser?.sportPlan else { return [] }
+        let resolvedSports = plan.resolvedSports(at: Date())
+        guard let selectedSportId = plan.resolvedSelectedSportId else { return resolvedSports }
+        let activeSports = resolvedSports.filter { $0.id == selectedSportId }
+        return activeSports.isEmpty ? resolvedSports : activeSports
+    }
+
+    private func publishWidgetSnapshot(localProfile: UserProfileInput?) async {
+        let resolvedSports = firestoreUser?.sportPlan?.resolvedSports(at: Date()) ?? []
+        let selectedSportId = firestoreUser?.sportPlan?.resolvedSelectedSportId
+        let activeSport = resolvedSports.first(where: { $0.id == selectedSportId }) ?? resolvedSports.first
+        let resolvedVitals = await healthDataResolver.resolveVitals(
+            localProfile: localProfile,
+            firestoreUser: firestoreUser
+        )
+
+        let snapshot = ViRestWidgetSnapshot(
+            updatedAt: Date(),
+            latestRestingHR: resolvedVitals.latestRestingHeartRate,
+            targetRestingHR: resolvedVitals.targetRestingHeartRate,
+            activeSportName: activeSport?.displayName,
+            completedSessions: activeSport?.completedThisWeek ?? 0,
+            targetSessions: activeSport?.weeklyTargetCount ?? 0
+        )
+        widgetSyncService.publish(snapshot: snapshot)
     }
     
     // DEBUG ONLY — remove before release

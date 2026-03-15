@@ -4,7 +4,7 @@ struct SurfaceCard<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 16) {
             content
         }
         .padding(16)

@@ -66,6 +66,23 @@ enum TargetRHRGoalQuestion: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    var representativeBPM: Int {
+        switch self {
+        case .from90To99:
+            return 95
+        case .from80To89:
+            return 85
+        case .from70To79:
+            return 75
+        case .from60To69:
+            return 65
+        case .from50To59:
+            return 55
+        case .below50:
+            return 48
+        }
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let raw = try container.decode(String.self)
@@ -341,6 +358,23 @@ enum PreferredTime: String, Codable, CaseIterable, Identifiable {
         }
     }
 
+    var reminderHour: Int {
+        switch self {
+        case .morning:
+            return 6
+        case .midday:
+            return 12
+        case .evening:
+            return 17
+        case .flexible:
+            return 17
+        }
+    }
+
+    var reminderDateComponents: DateComponents {
+        DateComponents(hour: reminderHour, minute: 0)
+    }
+
     init(from decoder: Decoder) throws {
         let container = try decoder.singleValueContainer()
         let raw = try container.decode(String.self)
@@ -357,6 +391,33 @@ enum PreferredTime: String, Codable, CaseIterable, Identifiable {
         default:
             self = .flexible
         }
+    }
+}
+
+struct CustomReminderTime: Codable, Equatable {
+    var hour: Int
+    var minute: Int
+
+    init(hour: Int, minute: Int) {
+        self.hour = max(0, min(23, hour))
+        self.minute = max(0, min(59, minute))
+    }
+
+    init(date: Date, calendar: Calendar = .current) {
+        let components = calendar.dateComponents([.hour, .minute], from: date)
+        self.init(hour: components.hour ?? 17, minute: components.minute ?? 0)
+    }
+
+    var dateComponents: DateComponents {
+        DateComponents(hour: hour, minute: minute)
+    }
+
+    func toDate(calendar: Calendar = .current) -> Date {
+        let now = Date()
+        var components = calendar.dateComponents([.year, .month, .day], from: now)
+        components.hour = hour
+        components.minute = minute
+        return calendar.date(from: components) ?? now
     }
 }
 
@@ -576,6 +637,7 @@ struct UserProfileInput: Codable, Identifiable, Equatable {
     var sessionDuration: SessionDurationOption
     var daysPerWeek: DaysPerWeekAvailability
     var preferredTime: PreferredTime
+    var customReminderTime: CustomReminderTime?
     var environment: SportEnvironment
     var questionnaireAccessOptions: [ExerciseAccessOptionQuestion]?
     var enjoyableActivities: [ActivityType]
@@ -599,6 +661,7 @@ struct UserProfileInput: Codable, Identifiable, Equatable {
         sessionDuration: SessionDurationOption = .twentyToThirty,
         daysPerWeek: DaysPerWeekAvailability = .threeToFour,
         preferredTime: PreferredTime = .flexible,
+        customReminderTime: CustomReminderTime? = nil,
         environment: SportEnvironment = .both,
         questionnaireAccessOptions: [ExerciseAccessOptionQuestion]? = nil,
         enjoyableActivities: [ActivityType] = [.walking],
@@ -621,6 +684,7 @@ struct UserProfileInput: Codable, Identifiable, Equatable {
         self.sessionDuration = sessionDuration
         self.daysPerWeek = daysPerWeek
         self.preferredTime = preferredTime
+        self.customReminderTime = customReminderTime
         self.environment = environment
         self.questionnaireAccessOptions = questionnaireAccessOptions
         self.enjoyableActivities = enjoyableActivities
@@ -630,5 +694,9 @@ struct UserProfileInput: Codable, Identifiable, Equatable {
         self.cardioExperienceLevel = cardioExperienceLevel
         self.acceptedDisclaimer = acceptedDisclaimer
         self.updatedAt = updatedAt
+    }
+
+    var resolvedReminderDateComponents: DateComponents {
+        customReminderTime?.dateComponents ?? preferredTime.reminderDateComponents
     }
 }

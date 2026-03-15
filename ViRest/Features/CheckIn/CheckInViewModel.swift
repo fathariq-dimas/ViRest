@@ -28,6 +28,8 @@ final class CheckInViewModel: ObservableObject {
     private let planAdjustmentService: PlanAdjusting
     private let gamificationService: GamificationProviding
     private let notificationService: NotificationScheduling
+    private let firestoreUserRepository: FirestoreUserRepository?
+    private let authService: AuthProviding?
 
     init(
         userProfileRepository: UserProfileRepository,
@@ -37,7 +39,9 @@ final class CheckInViewModel: ObservableObject {
         healthService: HealthDataProviding,
         planAdjustmentService: PlanAdjusting,
         gamificationService: GamificationProviding,
-        notificationService: NotificationScheduling
+        notificationService: NotificationScheduling,
+        firestoreUserRepository: FirestoreUserRepository? = nil,
+        authService: AuthProviding? = nil
     ) {
         self.userProfileRepository = userProfileRepository
         self.planRepository = planRepository
@@ -47,6 +51,8 @@ final class CheckInViewModel: ObservableObject {
         self.planAdjustmentService = planAdjustmentService
         self.gamificationService = gamificationService
         self.notificationService = notificationService
+        self.firestoreUserRepository = firestoreUserRepository
+        self.authService = authService
     }
 
     func load() {
@@ -126,6 +132,13 @@ final class CheckInViewModel: ObservableObject {
             let existingState = try badgeRepository.loadState()
             let gamification = gamificationService.evaluate(after: checkIn, current: existingState)
             try badgeRepository.saveState(gamification.updatedState)
+            if let firestoreUserRepository,
+               case .signedIn(let user) = authService?.authState {
+                try? await firestoreUserRepository.saveBadgeState(
+                    userId: user.id,
+                    state: gamification.updatedState
+                )
+            }
 
             appreciationText = gamification.appreciationMessage
             newBadges = gamification.newlyEarnedBadges

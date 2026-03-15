@@ -5,6 +5,7 @@ struct WeeklyActivityGoalSelector: View {
 
     @State private var draftGoal: WeeklyGoalFrequency
     @State private var showFrequencyPicker = false
+    @State private var frequencySheetHeight: CGFloat = 340
 
     init(goal: Binding<WeeklyGoalFrequency>) {
         _goal = goal
@@ -71,7 +72,15 @@ struct WeeklyActivityGoalSelector: View {
         }
         .sheet(isPresented: $showFrequencyPicker) {
             frequencyPickerSheet
-                .presentationDetents([.fraction(0.35)])
+                .onIntrinsicHeightChange { contentHeight in
+                    frequencySheetHeight = SheetSizing.fittedHeight(
+                        from: contentHeight,
+                        minHeight: 300,
+                        maxFraction: 0.58,
+                        extra: 12
+                    )
+                }
+                .presentationDetents([.height(frequencySheetHeight)])
                 .presentationDragIndicator(.hidden)
         }
     }
@@ -95,37 +104,45 @@ struct WeeklyActivityGoalSelector: View {
     }
 
     private var frequencyPickerSheet: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Button("Cancel") {
-                    showFrequencyPicker = false
-                }
-                .font(AppTypography.caption(14))
-                .foregroundStyle(.black.opacity(0.65))
+        ZStack {
+            AppBottomSheetStyle.backgroundColor.ignoresSafeArea()
 
-                Spacer()
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: AppBottomSheetStyle.contentSpacing) {
+                    AppBottomSheetHandle()
 
-                Button("Done") {
-                    goal = draftGoal
-                    showFrequencyPicker = false
+                    HStack {
+                        Button("Cancel") {
+                            showFrequencyPicker = false
+                        }
+                        .font(AppTypography.caption(14))
+                        .foregroundStyle(AppPalette.textSecondary)
+
+                        Spacer()
+
+                        Button("Done") {
+                            goal = draftGoal
+                            showFrequencyPicker = false
+                        }
+                        .font(AppTypography.caption(14))
+                        .foregroundStyle(AppPalette.accent)
+                    }
+
+                    Divider().overlay(Color.white.opacity(0.12))
+
+                    Picker("Frequency", selection: $draftGoal) {
+                        ForEach(WeeklyGoalFrequency.allCases) { option in
+                            Text(option.displayName).tag(option)
+                        }
+                    }
+                    .pickerStyle(.wheel)
+                    .labelsHidden()
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 170)
                 }
-                .font(AppTypography.caption(14))
-                .foregroundStyle(.black)
+                .padding(.horizontal, AppBottomSheetStyle.horizontalPadding)
+                .padding(.bottom, AppBottomSheetStyle.bottomPadding)
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-
-            Divider().overlay(Color.black.opacity(0.12))
-
-            Picker("Frequency", selection: $draftGoal) {
-                ForEach(WeeklyGoalFrequency.allCases) { option in
-                    Text(option.displayName).tag(option)
-                }
-            }
-            .pickerStyle(.wheel)
-            .labelsHidden()
         }
-        .background(Color(UIColor.systemBackground))
-        .preferredColorScheme(.light)
     }
 }

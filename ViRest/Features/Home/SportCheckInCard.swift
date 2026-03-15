@@ -9,6 +9,7 @@ import SwiftUI
 
 struct SportCheckInCard: View {
     let sport: FirestoreSportEntry
+    let isLocked: Bool
     let onCheckIn: () -> Void
 
     private var progress: Double {
@@ -29,6 +30,11 @@ struct SportCheckInCard: View {
                         Text(sport.displayName)
                             .font(AppTypography.title(20))
                             .foregroundStyle(AppPalette.textPrimary)
+                        if isLocked {
+                            Label("Locked", systemImage: "lock.fill")
+                                .font(AppTypography.caption(12))
+                                .foregroundStyle(AppPalette.textSecondary)
+                        }
                         Text("\(sport.durationMinutes) min/session")
                             .font(AppTypography.caption(13))
                             .foregroundStyle(AppPalette.textSecondary)
@@ -54,14 +60,18 @@ struct SportCheckInCard: View {
                         Button(action: onCheckIn) {
                             ZStack {
                                 Circle()
-                                    .fill(isTargetMet ? Color.green : AppPalette.accent)
+                                    .fill(
+                                        isLocked
+                                        ? Color.white.opacity(0.2)
+                                        : (isTargetMet ? Color.green : AppPalette.accent)
+                                    )
                                     .frame(width: 44, height: 44)
-                                Image(systemName: isTargetMet ? "checkmark" : "plus")
+                                Image(systemName: isLocked ? "lock.fill" : (isTargetMet ? "checkmark" : "plus"))
                                     .font(.system(size: 18, weight: .bold))
                                     .foregroundStyle(.white)
                             }
                         }
-                        .disabled(isTargetMet)
+                        .disabled(isTargetMet || isLocked)
                     }
                 }
 
@@ -72,14 +82,21 @@ struct SportCheckInCard: View {
                             .fill(Color.white.opacity(0.1))
                             .frame(height: 4)
                         Capsule()
-                            .fill(isTargetMet ? Color.green : AppPalette.accent)
+                            .fill(isLocked ? Color.white.opacity(0.25) : (isTargetMet ? Color.green : AppPalette.accent))
                             .frame(width: geo.size.width * progress, height: 4)
                     }
                 }
                 .frame(height: 4)
 
+                if isLocked {
+                    Text("Unlock this sport from Profile settings to check in.")
+                        .font(AppTypography.caption(12))
+                        .foregroundStyle(AppPalette.textSecondary)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+
                 // Weekly target met label
-                if isTargetMet {
+                if isTargetMet && !isLocked {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.seal.fill")
                             .font(.system(size: 12))

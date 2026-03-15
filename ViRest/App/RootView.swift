@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct RootView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var appCoordinator: AppCoordinator
     @StateObject private var authCoordinator: AuthCoordinator
     @StateObject private var onboardingCoordinator = OnboardingCoordinator()
@@ -10,6 +11,7 @@ struct RootView: View {
     @StateObject private var authViewModel: AuthViewModel
     @StateObject private var onboardingLoginViewModel: OnboardingViewModel
     @StateObject private var onboardingRegisterViewModel: OnboardingViewModel
+    @State private var pendingWidgetCheckInDeepLink = false
 
     init(container: AppContainer) {
         self.container = container
@@ -68,7 +70,7 @@ struct RootView: View {
             switch appCoordinator.route {
             case .loading:
                 ZStack {
-                    ProgressView("Preparing ViRest...")
+                    ProgressView("Preparing Virest...")
                         .tint(.white)
                         .foregroundStyle(.white)
                 }
@@ -123,6 +125,41 @@ struct RootView: View {
         }
         .task {
             await appCoordinator.bootstrap()
+            dispatchPendingWidgetCheckInIfNeeded()
+        }
+        .onOpenURL { url in
+            handleIncomingURL(url)
+        }
+        .onChange(of: appCoordinator.route) { _, _ in
+            dispatchPendingWidgetCheckInIfNeeded()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            Task {
+                await appCoordinator.syncHealthIfNeededOnActive()
+            }
+        }
+    }
+
+    private func handleIncomingURL(_ url: URL) {
+        guard url.scheme?.lowercased() == "virest" else { return }
+
+        let host = url.host?.lowercased()
+        let path = url.path.lowercased()
+        let isCheckInRoute = host == "checkin" || host == "check-in" || path == "/checkin" || path == "/check-in"
+
+        guard isCheckInRoute else { return }
+        pendingWidgetCheckInDeepLink = true
+        dispatchPendingWidgetCheckInIfNeeded()
+    }
+
+    private func dispatchPendingWidgetCheckInIfNeeded() {
+        guard pendingWidgetCheckInDeepLink else { return }
+        guard appCoordinator.route == .main else { return }
+
+        pendingWidgetCheckInDeepLink = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            NotificationCenter.default.post(name: .widgetCheckInRequested, object: nil)
         }
     }
 }
