@@ -37,7 +37,11 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
         )
     }
 
-    func recommend(request: RecommendationRequest) -> RecommendationResult {
+    func recommend(request: RecommendationRequest) throws -> RecommendationResult {
+        guard !catalog.exercises.isEmpty else {
+            throw RecommendationError.catalogUnavailable
+        }
+
         let profile = request.userProfile
         let currentRHR = resolvedCurrentRHR(profile: profile, snapshot: request.healthSnapshot)
         let bmiValue = resolvedBMI(profile: profile, snapshot: request.healthSnapshot)
@@ -96,22 +100,11 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
         let equipmentPhaseCandidates = usedEquipmentRelaxation ? hardCandidates : strictEquipmentCandidates
 
         let safeCandidates = equipmentPhaseCandidates.filter { $0.safetyConflicts.isEmpty }
-        let usedSafetyFallback = safeCandidates.isEmpty && !concernTags.isEmpty
-
-        let rankingPool: [Candidate]
-        if !safeCandidates.isEmpty {
-            rankingPool = safeCandidates
-        } else if usedSafetyFallback {
-            rankingPool = Array(
-                equipmentPhaseCandidates
-                    .sorted { lhs, rhs in
-                        lhs.safetyConflicts.count < rhs.safetyConflicts.count
-                    }
-                    .prefix(5)
-            )
-        } else {
-            rankingPool = equipmentPhaseCandidates
+        guard !safeCandidates.isEmpty else {
+            throw RecommendationError.noSafeRecommendation
         }
+
+        let rankingPool = safeCandidates
 
         let scored = rankingPool
             .map {
@@ -123,8 +116,7 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
                     userDurationOption: userDurationOption,
                     preferredFrequency: userFrequency,
                     accessSelection: accessSelection,
-                    preferredTime: profile.preferredTime,
-                    usedSafetyFallback: usedSafetyFallback
+                    preferredTime: profile.preferredTime
                 )
             }
             .sorted { lhs, rhs in
@@ -143,13 +135,16 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
             let supplemental = supplementalRecommendations(
                 excluding: existingNames,
                 count: 3 - rankedRecommendations.count,
-                profile: profile,
-                currentRHR: currentRHR
+                currentRHR: currentRHR,
+                plannedDurationMinutes: profile.sessionDuration.recommendedMinutes,
+                candidates: safeCandidates
             )
             rankedRecommendations.append(contentsOf: supplemental)
         }
 
-        let primary = rankedRecommendations.first ?? fallbackRecommendation(for: profile, currentRHR: currentRHR)
+        guard let primary = rankedRecommendations.first else {
+            throw RecommendationError.noSafeRecommendation
+        }
         let alternatives = Array(rankedRecommendations.dropFirst().prefix(2))
 
         let weeklyPlan = WeeklyPlan(
@@ -161,8 +156,7 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
             notes: buildPlanNotes(
                 profile: profile,
                 hardFilterMode: hardMode,
-                usedEquipmentRelaxation: usedEquipmentRelaxation,
-                usedSafetyFallback: usedSafetyFallback
+                usedEquipmentRelaxation: usedEquipmentRelaxation
             )
         )
 
@@ -288,8 +282,7 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
         userDurationOption: SessionDurationOption,
         preferredFrequency: ClosedRange<Int>,
         accessSelection: AccessSelection,
-        preferredTime: PreferredTime,
-        usedSafetyFallback: Bool
+        preferredTime: PreferredTime
     ) -> ScoredCandidate {
         let durationRange = candidate.bmiRule.durationPrescription.entryRange ?? preferredDuration
         let frequencyRange = candidate.bmiRule.weeklyFrequencyPrescription.entryRange ?? preferredFrequency
@@ -314,15 +307,9 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
             equipmentRequired: equipmentRequired
         )
 
-        let safetyConflicts = candidate.safetyConflicts
-        let hasSafetyConflict = !safetyConflicts.isEmpty
-
         var hardQuality = baseHardQuality(for: candidate.hardFilterMode)
         if !strictEquipmentCompatible {
             hardQuality -= 0.03
-        }
-        if hasSafetyConflict {
-            hardQuality *= usedSafetyFallback ? 0.35 : 0.15
         }
         hardQuality = max(0.05, min(1.0, hardQuality))
 
@@ -345,8 +332,7 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
             recommendedFrequency: frequencyRange,
             equipmentScore: equipmentScore,
             strictEquipmentCompatible: strictEquipmentCompatible,
-            preferredTime: preferredTime,
-            hasSafetyConflict: hasSafetyConflict
+            preferredTime: preferredTime
         )
 
         let plannedDurationOption = compromiseDurationOption(
@@ -377,8 +363,7 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
         recommendedFrequency: ClosedRange<Int>,
         equipmentScore: Double,
         strictEquipmentCompatible: Bool,
-        preferredTime: PreferredTime,
-        hasSafetyConflict: Bool
+        preferredTime: PreferredTime
     ) -> [String] {
         var reasons: [String] = []
 
@@ -391,15 +376,10 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
         } else if equipmentScore >= 0.6 {
             reasons.append("Equipment fit: partial match, still feasible with your current access.")
         } else {
-            reasons.append("Equipment fit: limited match, shown as fallback option.")
+            reasons.append("Equipment fit: limited match, shown as an available option.")
         }
 
-        if hasSafetyConflict {
-            let conflicts = candidate.safetyConflicts.joined(separator: ", ")
-            reasons.append("Safety warning: contraindication overlap (\(conflicts)).")
-        } else {
-            reasons.append("Safety fit: no contraindication overlap detected.")
-        }
+        reasons.append("Safety fit: no contraindication overlap detected.")
 
         reasons.append("Duration fit: \(minutesDescription(recommendedDuration)) vs your \(minutesDescription(preferredDuration)).")
         reasons.append("Frequency fit: \(sessionsDescription(recommendedFrequency)) vs your \(sessionsDescription(preferredFrequency)).")
@@ -415,8 +395,7 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
     private func buildPlanNotes(
         profile: UserProfileInput,
         hardFilterMode: HardFilterMode,
-        usedEquipmentRelaxation: Bool,
-        usedSafetyFallback: Bool
+        usedEquipmentRelaxation: Bool
     ) -> [String] {
         var notes: [String] = [
             "Recommendations are generated from sports.json.",
@@ -435,10 +414,6 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
 
         if usedEquipmentRelaxation {
             notes.append("No exact equipment match found; equipment was treated as soft-fit for best available options.")
-        }
-
-        if usedSafetyFallback {
-            notes.append("No fully safe match after contraindication filtering; fallback options are shown with safety warnings.")
         }
 
         return notes
@@ -767,75 +742,45 @@ struct RuleBasedRecommendationEngine: RecommendationProviding {
         }
     }
 
-    private func fallbackRecommendation(for profile: UserProfileInput, currentRHR: Int) -> SportRecommendation {
-        let environmentMatched = catalog.exercises.filter {
-            isEnvironmentMatch(profile.environment, exerciseEnvironment: $0.environment)
-        }
-        let rhrMatched = environmentMatched.filter { exercise in
-            exercise.rhrBands.contains { rhrBandContains($0.rhrBand, bpm: currentRHR) }
-        }
-        let exerciseName =
-            rhrMatched.first?.exercise ??
-            environmentMatched.first?.exercise ??
-            catalog.exercises.first?.exercise ??
-            "Brisk walking"
-
-        return SportRecommendation(
-            activity: activityType(forExerciseName: exerciseName),
-            displayName: exerciseName,
-            score: 40,
-            plannedDurationMinutes: profile.sessionDuration.recommendedMinutes,
-            targetRPE: RPERange(min: 2, max: 4),
-            reasons: [
-                "No strong match found for strict hard filters.",
-                "Fallback recommendation generated from sports catalog data.",
-                "Please review contraindications and seek medical clearance when needed."
-            ]
-        )
-    }
-
     private func supplementalRecommendations(
         excluding existingNames: Set<String>,
         count: Int,
-        profile: UserProfileInput,
-        currentRHR: Int
+        currentRHR: Int,
+        plannedDurationMinutes: Int,
+        candidates: [Candidate]
     ) -> [SportRecommendation] {
         guard count > 0 else { return [] }
 
         var usedNames = existingNames
         var results: [SportRecommendation] = []
 
-        let environmentMatched = catalog.exercises.filter {
-            isEnvironmentMatch(profile.environment, exerciseEnvironment: $0.environment)
-        }
-
-        let prioritized = environmentMatched.sorted { lhs, rhs in
-            let lhsRHR = lhs.rhrBands.contains { rhrBandContains($0.rhrBand, bpm: currentRHR) }
-            let rhsRHR = rhs.rhrBands.contains { rhrBandContains($0.rhrBand, bpm: currentRHR) }
+        let prioritized = candidates.sorted { lhs, rhs in
+            let lhsRHR = rhrBandContains(lhs.rhrBandRule.rhrBand, bpm: currentRHR)
+            let rhsRHR = rhrBandContains(rhs.rhrBandRule.rhrBand, bpm: currentRHR)
             if lhsRHR != rhsRHR {
                 return lhsRHR && !rhsRHR
             }
-            return normalizedToken(lhs.exercise) < normalizedToken(rhs.exercise)
+            return normalizedToken(lhs.exercise.exercise) < normalizedToken(rhs.exercise.exercise)
         }
 
-        for exercise in prioritized {
-            let key = normalizedToken(exercise.exercise)
+        for candidate in prioritized {
+            let key = normalizedToken(candidate.exercise.exercise)
             guard !usedNames.contains(key) else { continue }
             usedNames.insert(key)
 
             let fallbackScore = max(18, 35 - (results.count * 5))
             results.append(
                 SportRecommendation(
-                    activity: activityType(forExerciseName: exercise.exercise),
-                    displayName: exercise.exercise,
+                    activity: activityType(forExerciseName: candidate.exercise.exercise),
+                    displayName: candidate.exercise.exercise,
                     score: Double(fallbackScore),
-                    plannedDurationMinutes: profile.sessionDuration.recommendedMinutes,
+                    plannedDurationMinutes: plannedDurationMinutes,
                     targetRPE: targetRPE(for: currentRHR),
                     reasons: [
                         "Added as additional option to provide multiple matches.",
                         "Ranked below your highest-fit recommendations."
                     ],
-                    cautions: []
+                    cautions: candidate.bmiRule.keyCautions
                 )
             )
 

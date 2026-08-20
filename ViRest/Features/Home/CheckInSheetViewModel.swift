@@ -141,14 +141,7 @@ final class CheckInSheetViewModel: ObservableObject {
                 recentSameSportCheckIns: recentHistory
             )
 
-            // 1. Record check-in counter in Firestore and consume pending deload if present.
-            try await firestoreUserRepository.recordCheckIn(
-                userId: user.id,
-                sportId: sport.id
-            )
-
-            // 2. Save check-in history entry with feedback details.
-            try await firestoreUserRepository.saveCheckInHistory(
+            let historyEntry = firestoreUserRepository.makeCheckInHistoryEntry(
                 userId: user.id,
                 sportId: sport.id,
                 sportName: sport.displayName,
@@ -161,7 +154,14 @@ final class CheckInSheetViewModel: ObservableObject {
                 decision: assessment?.decision
             )
 
-            // 3. Evaluate gamification (badges + level title) via existing service.
+            // Counter, plan mutation, and history are committed atomically.
+            try await firestoreUserRepository.recordCheckIn(
+                userId: user.id,
+                sportId: sport.id,
+                historyEntry: historyEntry
+            )
+
+            // Evaluate gamification after the durable check-in succeeds.
             let fakeCheckIn = SessionCheckIn(
                 sessionId: UUID(),
                 checkInDate: Date(),

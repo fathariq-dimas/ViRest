@@ -200,23 +200,12 @@ final class FirestoreUserRepository {
         try await ref.updateData(["sportPlan": encoded])
     }
 
-    // Called every time user taps '+' on a sport
-    func recordCheckIn(userId: String, sportId: String) async throws {
-        let ref = db.collection("users").document(userId)
-        try await ref.updateData([
-            "totalActionsCompleted": FieldValue.increment(Int64(1)),
-            "lastActiveAt": FieldValue.serverTimestamp(),
-            // Update the specific sport's completedThisWeek counter
-            // Uses dot notation to update nested array item
-            // Note: with array of structs you'll need a Cloud Function or
-            // re-read + write approach (see Phase 4 for the full pattern)
-        ])
-        // Re-read and update the sport plan's completedThisWeek
-        // (Firestore cannot atomically update inside arrays without transactions)
-        try await incrementSportCount(userId: userId, sportId: sportId)
-    }
-
-    private func incrementSportCount(userId: String, sportId: String) async throws {
+    // Counter, plan mutation, and history must succeed or fail together.
+    func recordCheckIn(
+        userId: String,
+        sportId: String,
+        historyEntry: CheckInHistoryEntry
+    ) async throws {
         let ref = db.collection("users").document(userId)
         _ = try await db.runTransaction { transaction, errorPointer in
             let snapshot: DocumentSnapshot
@@ -224,7 +213,10 @@ final class FirestoreUserRepository {
             catch { errorPointer?.pointee = error as NSError; return nil }
 
             guard var user = try? snapshot.data(as: FirestoreUser.self),
-                  var plan = user.sportPlan else { return nil }
+                  var plan = user.sportPlan else {
+                errorPointer?.pointee = AppError.persistence("Cannot record a check-in without an active sport plan.") as NSError
+                return nil
+            }
 
             let now = Date()
             for i in plan.sports.indices {
@@ -238,15 +230,28 @@ final class FirestoreUserRepository {
                 }
             }
 
-            for i in plan.sports.indices where plan.sports[i].id == sportId {
-                plan.sports[i].completedThisWeek += 1
-                if plan.sports[i].pendingDeloadSessions > 0 {
-                    plan.sports[i].pendingDeloadSessions -= 1
-                }
+            guard let sportIndex = plan.sports.firstIndex(where: { $0.id == sportId }) else {
+                errorPointer?.pointee = AppError.persistence("Cannot record a check-in for an unknown sport.") as NSError
+                return nil
             }
+
+            plan.sports[sportIndex].completedThisWeek += 1
+            if plan.sports[sportIndex].pendingDeloadSessions > 0 {
+                plan.sports[sportIndex].pendingDeloadSessions -= 1
+            }
+
             user.sportPlan = plan
-            if let encoded = try? Firestore.Encoder().encode(plan) {
-                transaction.updateData(["sportPlan": encoded], forDocument: ref)
+            do {
+                let encodedPlan = try Firestore.Encoder().encode(plan)
+                let historyRef = ref.collection("checkIns").document(historyEntry.id ?? UUID().uuidString)
+                try transaction.setData(from: FirestoreCheckInDTO(entry: historyEntry), forDocument: historyRef)
+                transaction.updateData([
+                    "sportPlan": encodedPlan,
+                    "totalActionsCompleted": FieldValue.increment(Int64(1)),
+                    "lastActiveAt": FieldValue.serverTimestamp()
+                ], forDocument: ref)
+            } catch {
+                errorPointer?.pointee = error as NSError
             }
             return nil
         }
@@ -278,7 +283,7 @@ final class FirestoreUserRepository {
         }
     }
 
-    func saveCheckInHistory(
+    func makeCheckInHistoryEntry(
         userId: String,
         sportId: String,
         sportName: String,
@@ -289,8 +294,8 @@ final class FirestoreUserRepository {
         discomfortAreas: [DiscomfortArea] = [],
         zone: SuitabilityZone? = nil,
         decision: ProgressionDecision? = nil
-    ) async throws {
-        let entry = CheckInHistoryEntry(
+    ) -> CheckInHistoryEntry {
+        CheckInHistoryEntry(
             sportId: sportId,
             sportName: sportName,
             createdAt: Date(),
@@ -302,9 +307,6 @@ final class FirestoreUserRepository {
             zone: zone,
             decision: decision
         )
-        let ref = db.collection("users").document(userId)
-            .collection("checkIns").document()
-        try ref.setData(from: entry)
     }
 
     func loadCheckInHistory(userId: String, limit: Int = 30) async throws -> [CheckInHistoryEntry] {
@@ -313,7 +315,7 @@ final class FirestoreUserRepository {
             .order(by: "date", descending: true)
             .limit(to: limit)
             .getDocuments()
-        return try snapshot.documents.map { try $0.data(as: CheckInHistoryEntry.self) }
+        return try snapshot.documents.map { try $0.data(as: FirestoreCheckInDTO.self).toDomain() }
     }
 
     func loadRecentCheckInHistory(
@@ -327,7 +329,7 @@ final class FirestoreUserRepository {
             .limit(to: max(limit * 8, 24))
             .getDocuments()
         return try snapshot.documents
-            .map { try $0.data(as: CheckInHistoryEntry.self) }
+            .map { try $0.data(as: FirestoreCheckInDTO.self).toDomain() }
             .filter { $0.sportId == sportId }
             .prefix(limit)
             .map { $0 }

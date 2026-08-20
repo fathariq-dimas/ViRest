@@ -66,7 +66,7 @@ final class SportSwitchOrchestrator: SportSwitchOrchestrating {
         var plan = currentPlan
         var sports = plan.sports
 
-        let resolvedTarget = resolveTargetCandidate(
+        let resolvedTarget = try resolveTargetCandidate(
             selectedSportId: selectedSportId,
             requestedSportId: requestedSportId,
             sports: sports,
@@ -119,7 +119,7 @@ final class SportSwitchOrchestrator: SportSwitchOrchestrating {
         notSuitableSportIds: Set<String>,
         userProfile: UserProfileInput?,
         healthSnapshot: HealthSnapshot?
-    ) -> (target: FirestoreSportEntry?, updatedSports: [FirestoreSportEntry]) {
+    ) throws -> (target: FirestoreSportEntry?, updatedSports: [FirestoreSportEntry]) {
         if let requestedSportId,
            requestedSportId != selectedSportId,
            !notSuitableSportIds.contains(requestedSportId),
@@ -137,7 +137,7 @@ final class SportSwitchOrchestrator: SportSwitchOrchestrating {
             return (nil, sports)
         }
 
-        let rerun = recommendationEngine.recommend(
+        let rerun = try recommendationEngine.recommend(
             request: RecommendationRequest(
                 userProfile: userProfile,
                 healthSnapshot: healthSnapshot,

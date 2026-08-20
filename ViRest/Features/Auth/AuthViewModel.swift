@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import AuthenticationServices
 
 @MainActor
 final class AuthViewModel: ObservableObject {
@@ -35,7 +36,9 @@ final class AuthViewModel: ObservableObject {
                 }
             } catch {
                 await MainActor.run {
-                    self.errorMessage = error.localizedDescription
+                    let wasCancelled = error is CancellationError
+                        || (error as? ASAuthorizationError)?.code == .canceled
+                    self.errorMessage = wasCancelled ? nil : error.localizedDescription
                     self.isLoading = false
                 }
             }
@@ -71,4 +74,3 @@ final class AuthViewModel: ObservableObject {
     // ))
 
 }
-

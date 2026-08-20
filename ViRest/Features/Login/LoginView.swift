@@ -40,6 +40,25 @@ struct LoginView: View {
                 }
                 .buttonStyle(.glass)
                 .disabled(viewModel.isLoading)
+
+                Button {
+                    viewModel.signInWithApple()
+                } label: {
+                    HStack(spacing: 10) {
+                        Text("Login with Apple")
+                            .font(.headline)
+                            .foregroundStyle(Color.vibrantGreen)
+
+                        Image(systemName: "apple.logo")
+                            .font(.headline)
+                            .foregroundStyle(.white)
+                    }
+                    .padding(.vertical, 8)
+                    .padding(.horizontal, 16)
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.glass)
+                .disabled(viewModel.isLoading)
                 
                 HStack(spacing: 16) {
                     Rectangle()
@@ -61,6 +80,7 @@ struct LoginView: View {
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.glass)
+                .accessibilityIdentifier("start-button")
             }.padding(.horizontal, 20)           
 
             if let errorMessage = viewModel.errorMessage {

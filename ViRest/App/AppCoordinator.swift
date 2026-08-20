@@ -4,11 +4,12 @@ import SwiftUI
 
 @MainActor
 final class AppCoordinator: ObservableObject {
-    enum Route {
+    enum Route: Equatable {
         case loading
         case login
         case onboardingLogin
         case main
+        case error(String)
     }
 
     @Published private(set) var route: Route = .loading
@@ -28,15 +29,29 @@ final class AppCoordinator: ObservableObject {
             route = .login
         case .signedIn(let user):
             await container.dailyHealthSyncService.syncIfNeeded(userId: user.id)
-            if let firestoreUser = try? await container.firestoreUserRepository.loadUser(userId: user.id),
-               firestoreUser.sportPlan != nil {
+            do {
+                guard let firestoreUser = try await container.firestoreUserRepository.loadUser(userId: user.id) else {
+                    container.widgetSyncService.clear()
+                    route = .onboardingLogin
+                    return
+                }
+
+                if firestoreUser.sportPlan != nil {
                 await publishWidgetSnapshot(for: user.id, firestoreUser: firestoreUser)
                 route = .main
-            } else {
-                container.widgetSyncService.clear()
-                route = .onboardingLogin
+                } else {
+                    container.widgetSyncService.clear()
+                    route = .onboardingLogin
+                }
+            } catch {
+                route = .error(error.localizedDescription)
             }
         }
+    }
+
+    func retryBootstrap() async {
+        route = .loading
+        await bootstrap()
     }
 
     func didAuthenticate() {
@@ -48,13 +63,21 @@ final class AppCoordinator: ObservableObject {
                 route = .login
             case .signedIn(let user):
                 await container.dailyHealthSyncService.syncIfNeeded(userId: user.id)
-                if let firestoreUser = try? await container.firestoreUserRepository.loadUser(userId: user.id),
-                   firestoreUser.sportPlan != nil {
-                    await publishWidgetSnapshot(for: user.id, firestoreUser: firestoreUser)
-                    route = .main
-                } else {
-                    container.widgetSyncService.clear()
-                    route = .onboardingLogin
+                do {
+                    guard let firestoreUser = try await container.firestoreUserRepository.loadUser(userId: user.id) else {
+                        container.widgetSyncService.clear()
+                        route = .onboardingLogin
+                        return
+                    }
+                    if firestoreUser.sportPlan != nil {
+                        await publishWidgetSnapshot(for: user.id, firestoreUser: firestoreUser)
+                        route = .main
+                    } else {
+                        container.widgetSyncService.clear()
+                        route = .onboardingLogin
+                    }
+                } catch {
+                    route = .error(error.localizedDescription)
                 }
             }
         }
