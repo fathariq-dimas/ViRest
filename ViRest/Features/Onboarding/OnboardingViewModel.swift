@@ -359,7 +359,7 @@ final class OnboardingViewModel: ObservableObject {
                 userProfile: profile, healthSnapshot: snapshot,
                 goalFrequency: goalFrequency, weekStartDate: Date()
             )
-            let result = recommendationEngine.recommend(request: request)
+            let result = try recommendationEngine.recommend(request: request)
             latestRecommendationResult = result
             let rawRecommendedSports = [result.primary] + result.alternatives
             let notSuitableSportIds = await loadNotSuitableSportIdsForCurrentUser()

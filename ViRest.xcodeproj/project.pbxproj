@@ -23,6 +23,20 @@
 			remoteGlobalIDString = 90A1B2C92F70000100A1B2C3;
 			remoteInfo = ViRestWidget;
 		};
+		A1B2C3E52F70000100A1B2C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 64211DB62F61338500A95CBF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 64211DBD2F61338500A95CBF;
+			remoteInfo = ViRest;
+		};
+		A1B2C3E62F70000100A1B2C3 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 64211DB62F61338500A95CBF /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 64211DBD2F61338500A95CBF;
+			remoteInfo = ViRest;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -42,6 +56,8 @@
 /* Begin PBXFileReference section */
 		64211DBE2F61338500A95CBF /* ViRest.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ViRest.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		90A1B2C42F70000100A1B2C3 /* ViRestWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ViRestWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D42F70000100A1B2C3 /* ViRestTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ViRestTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1B2C3D52F70000100A1B2C3 /* ViRestUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ViRestUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -78,6 +94,16 @@
 			path = ViRestWidget;
 			sourceTree = "<group>";
 		};
+		A1B2C3D62F70000100A1B2C3 /* ViRestTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ViRestTests;
+			sourceTree = "<group>";
+		};
+		A1B2C3D72F70000100A1B2C3 /* ViRestUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ViRestUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -100,6 +126,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3DC2F70000100A1B2C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3DF2F70000100A1B2C3 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -115,6 +155,8 @@
 			children = (
 				64211DC02F61338500A95CBF /* ViRest */,
 				90A1B2C62F70000100A1B2C3 /* ViRestWidget */,
+				A1B2C3D62F70000100A1B2C3 /* ViRestTests */,
+				A1B2C3D72F70000100A1B2C3 /* ViRestUITests */,
 				4234CDA32F641CAF004553F3 /* Frameworks */,
 				64211DBF2F61338500A95CBF /* Products */,
 			);
@@ -125,6 +167,8 @@
 			children = (
 				64211DBE2F61338500A95CBF /* ViRest.app */,
 				90A1B2C42F70000100A1B2C3 /* ViRestWidget.appex */,
+				A1B2C3D42F70000100A1B2C3 /* ViRestTests.xctest */,
+				A1B2C3D52F70000100A1B2C3 /* ViRestUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -183,6 +227,48 @@
 			productReference = 90A1B2C42F70000100A1B2C3 /* ViRestWidget.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		A1B2C3D82F70000100A1B2C3 /* ViRestTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3E02F70000100A1B2C3 /* Build configuration list for PBXNativeTarget "ViRestTests" */;
+			buildPhases = (
+				A1B2C3DB2F70000100A1B2C3 /* Sources */,
+				A1B2C3DC2F70000100A1B2C3 /* Frameworks */,
+				A1B2C3DD2F70000100A1B2C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3E22F70000100A1B2C3 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D62F70000100A1B2C3 /* ViRestTests */,
+			);
+			name = ViRestTests;
+			productName = ViRestTests;
+			productReference = A1B2C3D42F70000100A1B2C3 /* ViRestTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A1B2C3D92F70000100A1B2C3 /* ViRestUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1B2C3E32F70000100A1B2C3 /* Build configuration list for PBXNativeTarget "ViRestUITests" */;
+			buildPhases = (
+				A1B2C3DE2F70000100A1B2C3 /* Sources */,
+				A1B2C3DF2F70000100A1B2C3 /* Frameworks */,
+				A1B2C3E12F70000100A1B2C3 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A1B2C3E42F70000100A1B2C3 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				A1B2C3D72F70000100A1B2C3 /* ViRestUITests */,
+			);
+			name = ViRestUITests;
+			productName = ViRestUITests;
+			productReference = A1B2C3D52F70000100A1B2C3 /* ViRestUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -221,6 +307,8 @@
 			targets = (
 				64211DBD2F61338500A95CBF /* ViRest */,
 				90A1B2C92F70000100A1B2C3 /* ViRestWidget */,
+				A1B2C3D82F70000100A1B2C3 /* ViRestTests */,
+				A1B2C3D92F70000100A1B2C3 /* ViRestUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -234,6 +322,20 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		90A1B2CC2F70000100A1B2C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3DD2F70000100A1B2C3 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3E12F70000100A1B2C3 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -257,6 +359,20 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1B2C3DB2F70000100A1B2C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1B2C3DE2F70000100A1B2C3 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -264,6 +380,16 @@
 			isa = PBXTargetDependency;
 			target = 90A1B2C92F70000100A1B2C3 /* ViRestWidget */;
 			targetProxy = 90A1B2CA2F70000100A1B2C3 /* PBXContainerItemProxy */;
+		};
+		A1B2C3E22F70000100A1B2C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 64211DBD2F61338500A95CBF /* ViRest */;
+			targetProxy = A1B2C3E52F70000100A1B2C3 /* PBXContainerItemProxy */;
+		};
+		A1B2C3E42F70000100A1B2C3 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 64211DBD2F61338500A95CBF /* ViRest */;
+			targetProxy = A1B2C3E62F70000100A1B2C3 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -528,6 +654,82 @@
 			};
 			name = Release;
 		};
+		A1B2C3E72F70000100A1B2C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ViRest.app/ViRest";
+			};
+			name = Debug;
+		};
+		A1B2C3E82F70000100A1B2C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest.tests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/ViRest.app/ViRest";
+			};
+			name = Release;
+		};
+		A1B2C3E92F70000100A1B2C3 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = ViRest;
+			};
+			name = Debug;
+		};
+		A1B2C3EA2F70000100A1B2C3 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "halo-dek.virest.uitests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = ViRest;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -554,6 +756,24 @@
 			buildConfigurations = (
 				90A1B2CE2F70000100A1B2C3 /* Debug */,
 				90A1B2CF2F70000100A1B2C3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3E02F70000100A1B2C3 /* Build configuration list for PBXNativeTarget "ViRestTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3E72F70000100A1B2C3 /* Debug */,
+				A1B2C3E82F70000100A1B2C3 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1B2C3E32F70000100A1B2C3 /* Build configuration list for PBXNativeTarget "ViRestUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1B2C3E92F70000100A1B2C3 /* Debug */,
+				A1B2C3EA2F70000100A1B2C3 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

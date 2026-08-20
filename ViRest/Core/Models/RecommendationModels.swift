@@ -67,3 +67,17 @@ struct RecommendationResult: Equatable {
     var alternatives: [SportRecommendation]
     var weeklyPlan: WeeklyPlan
 }
+
+enum RecommendationError: LocalizedError, Equatable {
+    case catalogUnavailable
+    case noSafeRecommendation
+
+    var errorDescription: String? {
+        switch self {
+        case .catalogUnavailable:
+            "Exercise recommendations are temporarily unavailable. Please try again later."
+        case .noSafeRecommendation:
+            "No safe exercise match was found for your current answers. Please review your health information or seek professional guidance."
+        }
+    }
+}

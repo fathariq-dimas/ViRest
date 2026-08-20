@@ -52,6 +52,10 @@ struct RegisterView: View {
                     viewModel.signInWithGoogle()
                 }
 
+                authButton("Sign up with Apple", icon: "apple.logo") {
+                    viewModel.signInWithApple()
+                }
+
                 HStack(spacing: 16) {
                     Rectangle()
                         .fill(Color.white.opacity(0.2))

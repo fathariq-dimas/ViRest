@@ -1,6 +1,7 @@
-# --- Security: Ignore these first! ---
-GoogleService-Info.plist
-*.plist
+# --- Security ---
+# Keep the real Firebase configuration local. The app and widget Info.plist
+# files are source-controlled because they define each target's metadata.
+ViRest/GoogleService-Info.plist
 *.env
 
 # --- Xcode/Mac noise ---
@@ -8,3 +9,4 @@ GoogleService-Info.plist
 DerivedData/
 *.xcuserstate
 *.xcuserdatad
+xcuserdata/

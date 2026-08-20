@@ -31,6 +31,15 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
     }
 
     func restoreSession() async {
+#if canImport(FirebaseAuth)
+        guard let firebaseUser = Auth.auth().currentUser else {
+            authState = .signedOut
+            return
+        }
+
+        authState = .signedIn(makeAuthUser(from: firebaseUser))
+        return
+#else
         guard userDefaults.bool(forKey: Keys.hasActiveSession) else {
             userDefaults.removeObject(forKey: Keys.savedAuthUser)
             authState = .signedOut
@@ -46,6 +55,7 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
         }
 
         authState = .signedIn(user)
+#endif
     }
 
     func signInWithApple() async throws -> AuthUser {
@@ -60,7 +70,7 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
             provider: .apple
         )
 
-        try persist(user)
+        try persistFallbackUser(user)
         authState = .signedIn(user)
         return user
         #endif
@@ -78,7 +88,7 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
             provider: .google
         )
 
-        try persist(user)
+        try persistFallbackUser(user)
         authState = .signedIn(user)
         return user
         #endif
@@ -130,7 +140,6 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
             displayName: fUser.displayName ?? credential.fullName?.formatted() ?? "Apple User",
             provider: .apple
         )
-        try persist(user)
         authState = .signedIn(user)
         return user
     }
@@ -168,7 +177,6 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
             displayName: fUser.displayName ?? gidResult.user.profile?.name ?? "Google User",
             provider: .google
         )
-        try persist(user)
         authState = .signedIn(user)
         return user
         #else
@@ -186,7 +194,8 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
         request.nonce = nonce
 
         return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorizationAppleIDCredential, Error>) in
-            let delegate = AppleSignInDelegate { result in
+            let delegate = AppleSignInDelegate { [weak self] result in
+                self?.appleSignInDelegate = nil
                 switch result {
                 case .success(let credential):
                     continuation.resume(returning: credential)
@@ -251,7 +260,18 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
         return base
     }
 
-    private func persist(_ user: AuthUser) throws {
+#if canImport(FirebaseAuth)
+    private func makeAuthUser(from user: FirebaseAuth.User) -> AuthUser {
+        let provider: AuthProvider = user.providerData.first?.providerID == "apple.com" ? .apple : .google
+        return AuthUser(
+            id: user.uid,
+            email: user.email,
+            displayName: user.displayName ?? "",
+            provider: provider
+        )
+    }
+#else
+    private func persistFallbackUser(_ user: AuthUser) throws {
         do {
             let data = try encoder.encode(user)
             userDefaults.set(data, forKey: Keys.savedAuthUser)
@@ -260,8 +280,9 @@ final class FirebaseAuthService: AuthProviding, ObservableObject {
             throw AppError.auth("Failed to persist auth user: \(error.localizedDescription)")
         }
     }
+#endif
 }
-private final class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate {
+private final class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     private let completion: (Result<ASAuthorizationAppleIDCredential, Error>) -> Void
 
     init(completion: @escaping (Result<ASAuthorizationAppleIDCredential, Error>) -> Void) {
@@ -279,5 +300,12 @@ private final class AppleSignInDelegate: NSObject, ASAuthorizationControllerDele
     func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
         completion(.failure(error))
     }
-}
 
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+            ?? ASPresentationAnchor()
+    }
+}

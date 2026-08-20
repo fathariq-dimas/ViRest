@@ -47,6 +47,20 @@ struct ExerciseSeedExercise: Decodable {
     let equipment: [String]
     let rhrBands: [ExerciseSeedRHRBandRule]
 
+    init(
+        exercise: String,
+        environment: String,
+        impactLevel: String?,
+        equipment: [String],
+        rhrBands: [ExerciseSeedRHRBandRule]
+    ) {
+        self.exercise = exercise
+        self.environment = environment
+        self.impactLevel = impactLevel
+        self.equipment = equipment
+        self.rhrBands = rhrBands
+    }
+
     private enum CodingKeys: String, CodingKey {
         case exercise
         case name

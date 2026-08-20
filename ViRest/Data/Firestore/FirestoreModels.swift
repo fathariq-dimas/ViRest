@@ -8,6 +8,87 @@
 import Foundation
 import FirebaseFirestore
 
+// Firestore-only representation. Core models do not depend on Firebase types.
+struct FirestoreCheckInDTO: Codable {
+    @DocumentID var id: String?
+    var sportId: String
+    var sportName: String
+    var createdAt: Date
+    var durationMinutes: Int
+    var difficulty: ActivityDifficulty?
+    var fatigue: FatigueLevel?
+    var painLevel: PainLevel?
+    var discomfortAreas: [DiscomfortArea]
+    var zone: SuitabilityZone?
+    var decision: ProgressionDecision?
+
+    init(entry: CheckInHistoryEntry) {
+        id = entry.id
+        sportId = entry.sportId
+        sportName = entry.sportName
+        createdAt = entry.createdAt
+        durationMinutes = entry.durationMinutes
+        difficulty = entry.difficulty
+        fatigue = entry.fatigue
+        painLevel = entry.painLevel
+        discomfortAreas = entry.discomfortAreas
+        zone = entry.zone
+        decision = entry.decision
+    }
+
+    func toDomain() -> CheckInHistoryEntry {
+        CheckInHistoryEntry(
+            id: id,
+            sportId: sportId,
+            sportName: sportName,
+            createdAt: createdAt,
+            durationMinutes: durationMinutes,
+            difficulty: difficulty,
+            fatigue: fatigue,
+            painLevel: painLevel,
+            discomfortAreas: discomfortAreas,
+            zone: zone,
+            decision: decision
+        )
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case sportId, sportName, createdAt, date, durationMinutes
+        case difficulty, fatigue, painLevel, discomfortAreas, zone, decision
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sportId = try container.decode(String.self, forKey: .sportId)
+        sportName = try container.decode(String.self, forKey: .sportName)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt)
+            ?? container.decodeIfPresent(Date.self, forKey: .date)
+            ?? Date()
+        durationMinutes = try container.decodeIfPresent(Int.self, forKey: .durationMinutes) ?? 0
+        difficulty = try container.decodeIfPresent(ActivityDifficulty.self, forKey: .difficulty)
+        fatigue = try container.decodeIfPresent(FatigueLevel.self, forKey: .fatigue)
+        painLevel = try container.decodeIfPresent(PainLevel.self, forKey: .painLevel)
+        discomfortAreas = try container.decodeIfPresent([DiscomfortArea].self, forKey: .discomfortAreas) ?? []
+        zone = try container.decodeIfPresent(SuitabilityZone.self, forKey: .zone)
+        decision = try container.decodeIfPresent(ProgressionDecision.self, forKey: .decision)
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(sportId, forKey: .sportId)
+        try container.encode(sportName, forKey: .sportName)
+        try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(createdAt, forKey: .date)
+        try container.encode(durationMinutes, forKey: .durationMinutes)
+        try container.encodeIfPresent(difficulty, forKey: .difficulty)
+        try container.encodeIfPresent(fatigue, forKey: .fatigue)
+        try container.encodeIfPresent(painLevel, forKey: .painLevel)
+        try container.encode(discomfortAreas, forKey: .discomfortAreas)
+        try container.encodeIfPresent(zone, forKey: .zone)
+        try container.encodeIfPresent(decision, forKey: .decision)
+    }
+}
+
 // Maps to the 'users' Firestore collection
 struct FirestoreUser: Codable {
     @DocumentID var documentId: String?

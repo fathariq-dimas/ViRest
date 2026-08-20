@@ -1,5 +1,4 @@
 import Foundation
-import FirebaseFirestore
 
 enum SwitchReason: String, Codable, CaseIterable, Identifiable {
     case notSuitable = "not_suitable"
@@ -46,8 +45,8 @@ struct SuitabilityFeedbackInput: Equatable {
     var discomfortAreas: [DiscomfortArea]
 }
 
-struct CheckInHistoryEntry: Codable, Identifiable {
-    @DocumentID var id: String?
+struct CheckInHistoryEntry: Codable, Identifiable, Equatable {
+    var id: String?
     var sportId: String
     var sportName: String
     var createdAt: Date
@@ -60,20 +59,6 @@ struct CheckInHistoryEntry: Codable, Identifiable {
     var decision: ProgressionDecision?
 
     var date: Date { createdAt }
-
-    private enum CodingKeys: String, CodingKey {
-        case sportId
-        case sportName
-        case createdAt
-        case date
-        case durationMinutes
-        case difficulty
-        case fatigue
-        case painLevel
-        case discomfortAreas
-        case zone
-        case decision
-    }
 
     init(
         id: String? = nil,
@@ -101,37 +86,6 @@ struct CheckInHistoryEntry: Codable, Identifiable {
         self.decision = decision
     }
 
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        sportId = try container.decode(String.self, forKey: .sportId)
-        sportName = try container.decode(String.self, forKey: .sportName)
-        createdAt =
-            try container.decodeIfPresent(Date.self, forKey: .createdAt)
-            ?? container.decodeIfPresent(Date.self, forKey: .date)
-            ?? Date()
-        durationMinutes = try container.decodeIfPresent(Int.self, forKey: .durationMinutes) ?? 0
-        difficulty = try container.decodeIfPresent(ActivityDifficulty.self, forKey: .difficulty)
-        fatigue = try container.decodeIfPresent(FatigueLevel.self, forKey: .fatigue)
-        painLevel = try container.decodeIfPresent(PainLevel.self, forKey: .painLevel)
-        discomfortAreas = try container.decodeIfPresent([DiscomfortArea].self, forKey: .discomfortAreas) ?? []
-        zone = try container.decodeIfPresent(SuitabilityZone.self, forKey: .zone)
-        decision = try container.decodeIfPresent(ProgressionDecision.self, forKey: .decision)
-    }
-
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encode(sportId, forKey: .sportId)
-        try container.encode(sportName, forKey: .sportName)
-        try container.encode(createdAt, forKey: .createdAt)
-        try container.encode(createdAt, forKey: .date) // backward compatibility for existing query/order field
-        try container.encode(durationMinutes, forKey: .durationMinutes)
-        try container.encodeIfPresent(difficulty, forKey: .difficulty)
-        try container.encodeIfPresent(fatigue, forKey: .fatigue)
-        try container.encodeIfPresent(painLevel, forKey: .painLevel)
-        try container.encode(discomfortAreas, forKey: .discomfortAreas)
-        try container.encodeIfPresent(zone, forKey: .zone)
-        try container.encodeIfPresent(decision, forKey: .decision)
-    }
 }
 
 enum SportSwitchError: LocalizedError {

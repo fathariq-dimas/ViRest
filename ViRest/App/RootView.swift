@@ -126,6 +126,27 @@ struct RootView: View {
                     appCoordinator.signOut()
                     authCoordinator.path.removeAll()
                 }
+            case .error(let message):
+                VStack(spacing: 16) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.largeTitle)
+                        .accessibilityHidden(true)
+                    Text("We couldn't load your ViRest account.")
+                        .font(.headline)
+                        .multilineTextAlignment(.center)
+                    Text(message)
+                        .font(.footnote)
+                        .multilineTextAlignment(.center)
+                        .foregroundStyle(.secondary)
+                    Button("Try Again") {
+                        Task { await appCoordinator.retryBootstrap() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.richBlack)
+                .foregroundStyle(.white)
             }
         }
         .task {

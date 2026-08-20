@@ -28,7 +28,7 @@ protocol HealthDataResolving: AnyObject {
 }
 
 protocol RecommendationProviding {
-    func recommend(request: RecommendationRequest) -> RecommendationResult
+    func recommend(request: RecommendationRequest) throws -> RecommendationResult
 }
 
 protocol PlanAdjusting {

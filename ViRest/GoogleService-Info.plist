@@ -3,21 +3,21 @@
 <plist version="1.0">
 <dict>
 	<key>CLIENT_ID</key>
-	<string>30721313473-1nqgp0s6aqs0aubqdb1lsetk95cnf3pp.apps.googleusercontent.com</string>
+	<string>13787096958-k6hsk4s6tnro6un64m1oi7a6sm433qs0.apps.googleusercontent.com</string>
 	<key>REVERSED_CLIENT_ID</key>
-	<string>com.googleusercontent.apps.30721313473-1nqgp0s6aqs0aubqdb1lsetk95cnf3pp</string>
+	<string>com.googleusercontent.apps.13787096958-k6hsk4s6tnro6un64m1oi7a6sm433qs0</string>
 	<key>API_KEY</key>
-	<string>AIzaSyBqdFwi6ZNZI_tp1LUjb_puuepZHAiRpW8</string>
+	<string>AIzaSyCsNDPCL4rg8t3NVZ_KdOh3xHZG3Mx_bK4</string>
 	<key>GCM_SENDER_ID</key>
-	<string>30721313473</string>
+	<string>13787096958</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
-	<string>tomo-dev.ViRest</string>
+	<string>halo-dek.virest</string>
 	<key>PROJECT_ID</key>
-	<string>virest-42b02</string>
+	<string>virest-de218</string>
 	<key>STORAGE_BUCKET</key>
-	<string>virest-42b02.firebasestorage.app</string>
+	<string>virest-de218.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
 	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
@@ -29,6 +29,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:30721313473:ios:1596d7c35ba3e4799a6240</string>
+	<string>1:13787096958:ios:62714bcd894c33cadb752f</string>
 </dict>
 </plist>
