@@ -32,7 +32,7 @@ Allow users to check in after completing workouts and provide feedback about the
 ## 📷 Screenshots
 <div style="display: flex; gap: 16px; flex-wrap: wrap; justify-content: flex-start;">
     <img src="./ViRest/Resources/Screenshots/planScreen.png" width="240" alt="ViRest plan screen" />
-    <img src="./ViRest/Resources/Screenshots/rewardScreen.PNG" width="240" alt="ViRest reward screen" />
+    <img src="./ViRest/Resources/Screenshots/rewardScreen.png" width="240" alt="ViRest reward screen" />
 </div>
 
 ## 👥 Team Members
